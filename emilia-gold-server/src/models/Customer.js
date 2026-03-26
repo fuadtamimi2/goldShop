@@ -21,6 +21,12 @@ const customerSchema = new mongoose.Schema(
       trim: true,
     },
 
+    idNumber: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
     email: {
       type: String,
       default: "",

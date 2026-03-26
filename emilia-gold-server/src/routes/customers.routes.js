@@ -55,7 +55,7 @@ router.post(
   "/",
   protect,
   asyncHandler(async (req, res) => {
-    const { name, phone, email, city, notes } = req.body;
+    const { name, phone, idNumber, email, city, notes } = req.body;
 
     if (!name || !phone) {
       res.status(400);
@@ -66,6 +66,7 @@ router.post(
       storeId: req.user.storeId,
       name,
       phone,
+      idNumber,
       email,
       city,
       notes,
@@ -80,7 +81,7 @@ router.put(
   "/:id",
   protect,
   asyncHandler(async (req, res) => {
-    const { name, phone, email, city, notes, totalSpent, lastPurchase } = req.body;
+    const { name, phone, idNumber, email, city, notes, totalSpent, lastPurchase } = req.body;
 
     const doc = await Customer.findOne({
       _id: req.params.id,
@@ -94,6 +95,7 @@ router.put(
 
     if (name !== undefined) doc.name = name;
     if (phone !== undefined) doc.phone = phone;
+    if (idNumber !== undefined) doc.idNumber = idNumber;
     if (email !== undefined) doc.email = email;
     if (city !== undefined) doc.city = city;
     if (notes !== undefined) doc.notes = notes;

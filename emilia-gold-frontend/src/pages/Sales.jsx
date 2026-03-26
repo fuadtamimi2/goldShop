@@ -4,9 +4,9 @@ import PageHeader from "../ui/PageHeader";
 import Panel from "../ui/Panel";
 import Table from "../ui/Table";
 import StatusPill from "../ui/StatusPill";
-import { SALES_TRANSACTIONS } from "../data/sales";
 import { emitToast } from "../ui/toast";
 import { useCurrency } from "../store/currency.store";
+import { apiGet, apiPost } from "../services/apiClient";
 
 function todayISODate() {
   const now = new Date();
@@ -47,22 +47,40 @@ function Field({ label, children }) {
   );
 }
 
-function nextTxId(existingRows) {
-  const max = existingRows.reduce((m, row) => {
-    const n = Number(String(row.id || "").replace("TX-", ""));
-    return Number.isFinite(n) ? Math.max(m, n) : m;
-  }, 10600);
-
-  return `TX-${max + 1}`;
-}
+function nextTxId() { return ""; } // unused — backend generates refs
 
 export default function Sales() {
   const { currency, formatMoney, convertCurrency } = useCurrency();
   const [searchParams, setSearchParams] = useSearchParams();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("All");
-  const [transactions, setTransactions] = useState(SALES_TRANSACTIONS);
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
+
+  const loadSales = async () => {
+    try {
+      const data = await apiGet("/api/sales");
+      const mapped = (data.items || []).map((s) => ({
+        id: s.ref || s._id,
+        date: s.date ? s.date.slice(0, 10) : "",
+        product: s.items?.[0]?.description || "—",
+        amount: s.totalILS,
+        method: s.paymentMethod,
+        status: s.status,
+      }));
+      setTransactions(mapped);
+    } catch {
+      setTransactions([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSales();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const emptyDraft = {
     date: todayISODate(),
@@ -101,7 +119,7 @@ export default function Sales() {
     }
   }, [searchParams]);
 
-  const onCreateSale = () => {
+  const onCreateSale = async () => {
     const product = draft.product.trim();
     const amount = Number(draft.amount);
 
@@ -115,19 +133,35 @@ export default function Sales() {
       return;
     }
 
-    const tx = {
-      id: nextTxId(transactions),
-      date: draft.date || todayISODate(),
-      product,
-      amount: Math.round(convertCurrency(amount, currency, "ILS")),
-      method: draft.method,
-      status: draft.status,
-      grams: 0,
-    };
+    // Always store the authoritative amount in ILS
+    const totalILS = Math.round(convertCurrency(amount, currency, "ILS"));
 
-    setTransactions((prev) => [tx, ...prev]);
-    closeAdd();
-    emitToast({ type: "success", title: "Sale added", message: tx.id });
+    try {
+      const data = await apiPost("/api/sales", {
+        items: [{ description: product, qty: 1, unitPrice: totalILS }],
+        totalILS,
+        paymentMethod: draft.method,
+        status: draft.status,
+        date: draft.date || todayISODate(),
+      });
+
+      const s = data.item;
+      setTransactions((prev) => [
+        {
+          id: s.ref || s._id,
+          date: s.date ? s.date.slice(0, 10) : draft.date,
+          product,
+          amount: s.totalILS,
+          method: s.paymentMethod,
+          status: s.status,
+        },
+        ...prev,
+      ]);
+      closeAdd();
+      emitToast({ type: "success", title: "Sale added", message: s.ref || s._id });
+    } catch (err) {
+      emitToast({ type: "error", title: "Failed to save", message: err.message });
+    }
   };
 
   const rows = useMemo(() => {
@@ -195,7 +229,9 @@ export default function Sales() {
         </div>
 
         <div className="mt-4">
-          {rows.length === 0 ? (
+          {loading ? (
+            <div className="p-10 text-center text-sm text-slate-400">Loading sales...</div>
+          ) : rows.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-500">
               No sales found. Try changing filters.
             </div>

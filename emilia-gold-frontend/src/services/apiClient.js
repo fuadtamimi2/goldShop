@@ -1,31 +1,56 @@
 
-const USE_MOCK = true;
+const BASE = import.meta.env.VITE_API_URL || "http://localhost:5060";
 
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
+function authHeaders() {
+  const token = localStorage.getItem("eg_token");
+  return token
+    ? { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
+    : { "Content-Type": "application/json" };
 }
 
-export async function apiGet(url) {
-  if (USE_MOCK) {
-    await sleep(200);
-    return { ok: true };
+async function handleResponse(res) {
+  let body;
+  try {
+    body = await res.json();
+  } catch {
+    body = {};
   }
-  const res = await fetch(url, { credentials: "include" });
-  if (!res.ok) throw new Error(`GET ${url} failed`);
-  return res.json();
+  if (!res.ok) {
+    throw new Error(body.message || `HTTP ${res.status}`);
+  }
+  return body;
 }
 
-export async function apiPost(url, body) {
-  if (USE_MOCK) {
-    await sleep(200);
-    return { ok: true };
-  }
-  const res = await fetch(url, {
+export async function apiGet(path) {
+  const res = await fetch(`${BASE}${path}`, { headers: authHeaders() });
+  return handleResponse(res);
+}
+
+export async function apiPost(path, body) {
+  const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders(),
     body: JSON.stringify(body),
-    credentials: "include",
   });
-  if (!res.ok) throw new Error(`POST ${url} failed`);
-  return res.json();
+  return handleResponse(res);
 }
+
+export async function apiPut(path, body) {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "PUT",
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+  return handleResponse(res);
+}
+
+export async function apiDelete(path) {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  return handleResponse(res);
+}
+
+export { BASE };
+
