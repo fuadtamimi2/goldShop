@@ -24,8 +24,8 @@ function Card({ title, value, sub, badge }) {
 
 export default function Dashboard() {
   const { formatMoney } = useCurrency();
-  const today = "2026-03-25";
-  const yesterday = "2026-03-24";
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
 
   const paidSales = useMemo(
     () => SALES_TRANSACTIONS.filter((t) => t.status === "Paid"),

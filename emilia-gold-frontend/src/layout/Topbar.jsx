@@ -1,12 +1,14 @@
 import { useNavigate } from "react-router-dom";
 import { useCurrency } from "../store/currency.store";
+import { useAuth } from "../store/auth.store";
 
 export default function Topbar({ onMenuClick }) {
   const navigate = useNavigate();
   const { currency, setCurrency } = useCurrency();
+  const { logout } = useAuth();
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
+    logout();
     navigate("/login", { replace: true });
   };
 
