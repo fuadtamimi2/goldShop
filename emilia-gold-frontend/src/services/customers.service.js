@@ -27,9 +27,8 @@ function normalizePhone(phone) {
 }
 
 function isValidPhone(phone) {
-  // Israel mobile usually 9-10 digits after stripping, be permissive:
   const digits = normalizePhone(phone);
-  return digits.length >= 9 && digits.length <= 11;
+  return /^(052|059)\d{7}$/.test(digits);
 }
 
 function isValidEmail(email) {
@@ -68,8 +67,7 @@ function normalizeCustomerRecord(record) {
 
 // ---------- persistence ----------
 function initIfEmpty() {
-  const raw = localStorage.getItem(LS_KEY);
-  if (raw) return;
+  // Keep demo data simple: refresh always syncs from src/data/customers.js.
   localStorage.setItem(LS_KEY, JSON.stringify(customersSeed));
 }
 
@@ -113,9 +111,12 @@ function validateCustomerPayload(payload, { existing = [], forUpdate = false, cu
 
   if (!isNonEmptyStr(name)) return { ok: false, message: "Name is required." };
 
-  // phone optional? in your UI it exists; enforce basic if provided
-  if (isNonEmptyStr(phone) && !isValidPhone(phone)) {
-    return { ok: false, message: "Phone looks invalid." };
+  if (!isNonEmptyStr(phone)) {
+    return { ok: false, message: "Phone is required." };
+  }
+
+  if (!isValidPhone(phone)) {
+    return { ok: false, message: "Phone must start with 052 or 059 and be 10 digits." };
   }
 
   if (!isValidEmail(email)) {

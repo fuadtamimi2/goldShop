@@ -3,6 +3,37 @@ const Product = require("../models/Product");
 const protect = require("../middleware/auth");
 const asyncHandler = require("../utils/asyncHandler");
 
+function toNumber(value, fallback = 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizePayload(payload = {}) {
+    return {
+        name: String(payload.name || "").trim(),
+        sku: String(payload.sku || "").trim(),
+        category: String(payload.category || "").trim(),
+        productType: String(payload.productType || "").trim(),
+        karat: String(payload.karat || "").trim(),
+        quantity: toNumber(payload.quantity ?? payload.qty, 0),
+        totalWeight: toNumber(payload.totalWeight ?? payload.grams, 0),
+        markupPerGram: toNumber(payload.markupPerGram, 0),
+        baseCostPerGram: toNumber(payload.baseCostPerGram ?? payload.costPrice, 0),
+        notes: String(payload.notes || "").trim(),
+        isActive: payload.isActive !== false,
+    };
+}
+
+function validateNumbers({ quantity, totalWeight, markupPerGram, baseCostPerGram }) {
+    if (!Number.isInteger(quantity) || quantity < 0) return "quantity must be a whole number that is 0 or more";
+    if (totalWeight < 0) return "totalWeight must be 0 or more";
+    if (markupPerGram < 0) return "markupPerGram must be 0 or more";
+    if (baseCostPerGram < 0) return "baseCostPerGram must be 0 or more";
+    if (quantity === 0 && totalWeight > 0) return "totalWeight must be 0 when quantity is 0";
+    if (quantity > 0 && totalWeight <= 0) return "totalWeight must be greater than 0 when quantity is above 0";
+    return "";
+}
+
 // GET all products for current store
 router.get(
     "/",
@@ -16,6 +47,8 @@ router.get(
                 { name: { $regex: q, $options: "i" } },
                 { sku: { $regex: q, $options: "i" } },
                 { category: { $regex: q, $options: "i" } },
+                { productType: { $regex: q, $options: "i" } },
+                { karat: { $regex: q, $options: "i" } },
             ];
         }
 
@@ -48,23 +81,33 @@ router.post(
     "/",
     protect,
     asyncHandler(async (req, res) => {
-        const { name, sku, category, grams, qty, costPrice, sellingPrice, notes } = req.body;
+        const payload = normalizePayload(req.body);
 
-        if (!name) {
+        if (!payload.name) {
             res.status(400);
             throw new Error("Product name is required");
         }
 
+        const numberValidation = validateNumbers(payload);
+        if (numberValidation) {
+            res.status(400);
+            throw new Error(numberValidation);
+        }
+
+        if (payload.sku) {
+            const dupSku = await Product.findOne({
+                storeId: req.user.storeId,
+                sku: payload.sku,
+            });
+            if (dupSku) {
+                res.status(400);
+                throw new Error("SKU already exists in your store");
+            }
+        }
+
         const doc = await Product.create({
             storeId: req.user.storeId,
-            name,
-            sku,
-            category,
-            grams,
-            qty,
-            costPrice,
-            sellingPrice,
-            notes,
+            ...payload,
         });
 
         res.status(201).json({ item: doc });
@@ -76,6 +119,7 @@ router.put(
     "/:id",
     protect,
     asyncHandler(async (req, res) => {
+        const payload = normalizePayload(req.body);
         const doc = await Product.findOne({
             _id: req.params.id,
             storeId: req.user.storeId,
@@ -85,10 +129,30 @@ router.put(
             throw new Error("Product not found");
         }
 
-        const fields = ["name", "sku", "category", "grams", "qty", "costPrice", "sellingPrice", "notes", "isActive"];
-        for (const f of fields) {
-            if (req.body[f] !== undefined) doc[f] = req.body[f];
+        if (!payload.name) {
+            res.status(400);
+            throw new Error("Product name is required");
         }
+
+        const numberValidation = validateNumbers(payload);
+        if (numberValidation) {
+            res.status(400);
+            throw new Error(numberValidation);
+        }
+
+        if (payload.sku) {
+            const dupSku = await Product.findOne({
+                storeId: req.user.storeId,
+                sku: payload.sku,
+                _id: { $ne: doc._id },
+            });
+            if (dupSku) {
+                res.status(400);
+                throw new Error("SKU already exists in your store");
+            }
+        }
+
+        Object.assign(doc, payload);
 
         const updated = await doc.save();
         res.json({ item: updated });

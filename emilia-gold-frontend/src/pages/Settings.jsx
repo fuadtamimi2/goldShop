@@ -19,7 +19,7 @@ function Field({ label, children, hint }) {
 const LS_KEY = "eg_settings";
 
 const defaultState = {
-  profile: { name: "Fuad", phone: "059-000-0000", role: "Manager" },
+  profile: { name: "Fuad", phone: "052-000-0000", role: "Manager" },
   shop: { currency: "ILS", defaultKarat: "21K", lowStockLimit: 2 },
 };
 
@@ -196,8 +196,8 @@ export default function Settings() {
             onClick={handleCancel}
             disabled={!isDirty}
             className={`rounded-lg border px-4 py-2 text-sm font-semibold ${isDirty
-                ? "border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
-                : "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed"
+              ? "border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
+              : "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed"
               }`}
           >
             Cancel

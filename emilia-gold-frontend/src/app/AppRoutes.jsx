@@ -6,6 +6,7 @@ import Login from "../pages/Login";
 import Dashboard from "../pages/Dashboard";
 import Inventory from "../pages/Inventory";
 import Sales from "../pages/Sales";
+import GoldBuying from "../pages/GoldBuying";
 import Pricing from "../pages/Pricing";
 import Customers from "../pages/Customers";
 import Reports from "../pages/Reports";
@@ -22,6 +23,7 @@ export default function AppRoutes() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="inventory" element={<Inventory />} />
           <Route path="sales" element={<Sales />} />
+          <Route path="gold-buying" element={<GoldBuying />} />
           <Route path="pricing" element={<Pricing />} />
           <Route path="customers" element={<Customers />} />
           <Route path="reports" element={<Reports />} />

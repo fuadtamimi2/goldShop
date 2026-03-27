@@ -27,30 +27,41 @@ const productSchema = new mongoose.Schema(
             trim: true,
         },
 
-        // Weight in grams
-        grams: {
+        productType: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
+        karat: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
+        quantity: {
+            type: Number,
+            alias: "qty",
+            default: 0,
+            min: 0,
+        },
+
+        totalWeight: {
+            type: Number,
+            alias: "grams",
+            default: 0,
+            min: 0,
+        },
+
+        markupPerGram: {
             type: Number,
             default: 0,
             min: 0,
         },
 
-        // Current stock quantity
-        qty: {
+        baseCostPerGram: {
             type: Number,
-            default: 0,
-            min: 0,
-        },
-
-        // Cost price in ILS
-        costPrice: {
-            type: Number,
-            default: 0,
-            min: 0,
-        },
-
-        // Selling price in ILS
-        sellingPrice: {
-            type: Number,
+            alias: "costPrice",
             default: 0,
             min: 0,
         },
@@ -66,7 +77,11 @@ const productSchema = new mongoose.Schema(
             default: true,
         },
     },
-    { timestamps: true }
+    {
+        timestamps: true,
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true },
+    }
 );
 
 module.exports = mongoose.model("Product", productSchema);

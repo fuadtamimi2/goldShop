@@ -1,5 +1,5 @@
 
-const BASE = import.meta.env.VITE_API_URL || "http://localhost:5060";
+const BASE = import.meta.env.VITE_API_URL || "";
 
 function authHeaders() {
   const token = localStorage.getItem("eg_token");
@@ -38,6 +38,15 @@ export async function apiPost(path, body) {
 export async function apiPut(path, body) {
   const res = await fetch(`${BASE}${path}`, {
     method: "PUT",
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+  return handleResponse(res);
+}
+
+export async function apiPatch(path, body) {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "PATCH",
     headers: authHeaders(),
     body: JSON.stringify(body),
   });
