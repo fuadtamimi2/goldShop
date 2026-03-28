@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import Panel from "../ui/Panel";
 import { SALES_TRANSACTIONS } from "../data/sales";
 import { INVENTORY } from "../data/inventory";
@@ -24,21 +25,22 @@ function Card({ title, value, sub, badge }) {
 
 export default function Dashboard() {
   const { formatMoney } = useCurrency();
+  const { t } = useTranslation();
   const today = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
 
   const paidSales = useMemo(
-    () => SALES_TRANSACTIONS.filter((t) => t.status === "Paid"),
+    () => SALES_TRANSACTIONS.filter((tx) => tx.status === "Paid"),
     []
   );
 
-  const todaySales = paidSales.filter((t) => t.date === today);
-  const yesterdaySales = paidSales.filter((t) => t.date === yesterday);
+  const todaySales = paidSales.filter((tx) => tx.date === today);
+  const yesterdaySales = paidSales.filter((tx) => tx.date === yesterday);
 
-  const todayRevenue = todaySales.reduce((sum, t) => sum + t.amount, 0);
-  const yesterdayRevenue = yesterdaySales.reduce((sum, t) => sum + t.amount, 0);
+  const todayRevenue = todaySales.reduce((sum, tx) => sum + tx.amount, 0);
+  const yesterdayRevenue = yesterdaySales.reduce((sum, tx) => sum + tx.amount, 0);
   const todayTransactions = todaySales.length;
-  const totalGoldSold = paidSales.reduce((sum, t) => sum + t.grams, 0);
+  const totalGoldSold = paidSales.reduce((sum, tx) => sum + tx.grams, 0);
   const avgTicket = todayTransactions ? Math.round(todayRevenue / todayTransactions) : 0;
 
   const lowStock = INVENTORY.filter((i) => i.qty <= 2).length;
@@ -75,22 +77,22 @@ export default function Dashboard() {
 
   const kpis = [
     {
-      title: "Today Revenue",
+      title: t("dashboard.kpis.todayRevenue"),
       value: formatMoney(todayRevenue),
-      sub: `${changePct >= 0 ? "+" : ""}${changePct}% vs yesterday`,
-      badge: "Today",
+      sub: t("dashboard.kpis.vsYesterday", { change: `${changePct >= 0 ? "+" : ""}${changePct}` }),
+      badge: t("dashboard.kpis.todayBadge"),
     },
-    { title: "Transactions", value: todayTransactions, sub: "Paid transactions today" },
-    { title: "Gold Sold", value: `${totalGoldSold.toFixed(1)} g`, sub: "Across recent paid sales" },
-    { title: "Avg Ticket", value: formatMoney(avgTicket), sub: `Low stock alerts: ${lowStock}` },
+    { title: t("dashboard.kpis.transactions"), value: todayTransactions, sub: t("dashboard.kpis.transactionsSub") },
+    { title: t("dashboard.kpis.goldSold"), value: `${totalGoldSold.toFixed(1)} g`, sub: t("dashboard.kpis.goldSoldSub") },
+    { title: t("dashboard.kpis.avgTicket"), value: formatMoney(avgTicket), sub: t("dashboard.kpis.lowStockAlerts", { count: lowStock }) },
   ];
 
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-3xl font-semibold text-[var(--text)]">Dashboard</h1>
+        <h1 className="text-3xl font-semibold text-[var(--text)]">{t("dashboard.title")}</h1>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Overview of sales, inventory and gold pricing.
+          {t("dashboard.subtitle")}
         </p>
       </header>
 
@@ -101,7 +103,7 @@ export default function Dashboard() {
       </section>
 
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Panel title="Sales Over Time" meta="Last 5 days">
+        <Panel title={t("dashboard.salesOverTime")} meta={t("dashboard.last5Days")}>
           <div className="flex h-64 items-end gap-3 rounded-2xl bg-[var(--panel-soft)] p-4">
             {dailyTrend.map((d) => (
               <div key={d.date} className="flex flex-1 flex-col items-center justify-end gap-2">
@@ -116,13 +118,13 @@ export default function Dashboard() {
           </div>
         </Panel>
 
-        <Panel title="Top Products" meta="By paid revenue">
+        <Panel title={t("dashboard.topProducts")} meta={t("dashboard.byPaidRevenue")}>
           <div className="space-y-3">
             {topList.map((p, idx) => (
               <div key={p.product} className="flex items-center justify-between rounded-2xl bg-[var(--panel-soft)] px-4 py-3">
                 <div>
                   <div className="text-sm font-semibold text-[var(--text)]">{idx + 1}. {p.product}</div>
-                  <div className="text-xs text-[var(--text-muted)]">{p.count} sales</div>
+                  <div className="text-xs text-[var(--text-muted)]">{t("dashboard.sales", { count: p.count })}</div>
                 </div>
                 <div className="text-sm font-semibold text-[var(--brand-strong)]">{formatMoney(p.revenue)}</div>
               </div>

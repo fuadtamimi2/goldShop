@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import PageHeader from "../ui/PageHeader";
 import Panel from "../ui/Panel";
 import { emitToast } from "../ui/toast";
@@ -43,6 +44,7 @@ function Field({ label, children }) {
 
 export default function Customers() {
   const { formatMoney } = useCurrency();
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [q, setQ] = useState("");
   const [selectedId, setSelectedId] = useState(null);
@@ -97,8 +99,8 @@ export default function Customers() {
 
     emitToast({
       type: "success",
-      title: "Customer added",
-      message: res.customer?.name || "Saved",
+      title: t("customers.toasts.addedTitle"),
+      message: res.customer?.name || t("common.save"),
     });
 
     setAddOpen(false);
@@ -117,7 +119,7 @@ export default function Customers() {
 
     emitToast({
       type: "success",
-      title: "Customer updated",
+      title: t("customers.toasts.updatedTitle"),
       message: res.customer?.id || selected.id,
     });
 
@@ -127,18 +129,18 @@ export default function Customers() {
   const onDelete = () => {
     if (!selected) return;
 
-    const ok = confirm(`Delete ${selected.name}?`);
+    const ok = confirm(t("customers.deleteConfirm", { name: selected.name }));
     if (!ok) return;
 
     const res = deleteCustomer(selected.id);
     if (!res.ok) {
-      emitToast({ type: "error", title: "Error", message: res.message });
+      emitToast({ type: "error", title: t("common.error"), message: res.message });
       return;
     }
 
     emitToast({
       type: "success",
-      title: "Customer deleted",
+      title: t("customers.toasts.deletedTitle"),
       message: selected.id,
     });
 
@@ -148,8 +150,8 @@ export default function Customers() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Customers"
-        subtitle="View customers, history and contact details."
+        title={t("customers.title")}
+        subtitle={t("customers.subtitle")}
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -157,13 +159,13 @@ export default function Customers() {
         <div className="lg:col-span-2">
           <Panel
             title="Customers"
-            meta={`${customers.length} customers`}
+            meta={t("customers.meta", { count: customers.length })}
             right={
               <button
                 onClick={openAdd}
                 className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800"
               >
-                + New Customer
+                {t("customers.newCustomer")}
               </button>
             }
           >
@@ -171,7 +173,7 @@ export default function Customers() {
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Search name, ID number, phone, city or ID..."
+                placeholder={t("customers.searchPlaceholder")}
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
               />
             </div>
@@ -181,16 +183,16 @@ export default function Customers() {
                 <thead className="bg-slate-50 text-slate-600">
                   <tr>
                     <th className="px-4 py-3 text-left font-semibold">
-                      Customer
+                      {t("customers.table.customer")}
                     </th>
-                    <th className="px-4 py-3 text-left font-semibold">Phone</th>
-                    <th className="px-4 py-3 text-left font-semibold">ID Number</th>
-                    <th className="px-4 py-3 text-left font-semibold">City</th>
+                    <th className="px-4 py-3 text-left font-semibold">{t("customers.table.phone")}</th>
+                    <th className="px-4 py-3 text-left font-semibold">{t("customers.table.idNumber")}</th>
+                    <th className="px-4 py-3 text-left font-semibold">{t("customers.table.city")}</th>
                     <th className="px-4 py-3 text-left font-semibold">
-                      Total Spent
+                      {t("customers.table.totalSpent")}
                     </th>
                     <th className="px-4 py-3 text-left font-semibold">
-                      Last Purchase
+                      {t("customers.table.lastPurchase")}
                     </th>
                   </tr>
                 </thead>
@@ -198,7 +200,7 @@ export default function Customers() {
                   {customers.length === 0 ? (
                     <tr>
                       <td className="px-4 py-6 text-slate-500" colSpan={6}>
-                        No customers match your search.
+                        {t("customers.noCustomers")}
                       </td>
                     </tr>
                   ) : (
@@ -245,7 +247,7 @@ export default function Customers() {
         {/* RIGHT: details */}
         <div className="lg:col-span-1">
           <Panel
-            title="Customer Details"
+            title={t("customers.profile.title")}
             meta={selected ? selected.id : ""}
             right={
               selected ? (
@@ -254,13 +256,13 @@ export default function Customers() {
                     onClick={openEdit}
                     className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
                   >
-                    Edit
+                    {t("customers.profile.editBtn")}
                   </button>
                   <button
                     onClick={onDelete}
                     className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
                   >
-                    Delete
+                    {t("customers.profile.deleteBtn")}
                   </button>
                 </div>
               ) : null
@@ -268,7 +270,7 @@ export default function Customers() {
           >
             {!selected ? (
               <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
-                Select a customer from the list to view details.
+                {t("customers.noCustomers")}
               </div>
             ) : (
               <div className="space-y-3 text-sm">
@@ -278,29 +280,29 @@ export default function Customers() {
                 <div className="text-slate-600">{selected.city || "—"}</div>
 
                 <div className="mt-3 grid grid-cols-2 gap-3">
-                  <div className="text-slate-500">Phone</div>
+                  <div className="text-slate-500">{t("customers.profile.phone")}</div>
                   <div className="text-right text-slate-900">
                     {selected.phone || "—"}
                   </div>
 
-                  <div className="text-slate-500">Email</div>
+                  <div className="text-slate-500">{t("customers.profile.email")}</div>
                   <div className="text-right text-slate-900">
                     {selected.email || "—"}
                   </div>
 
-                  <div className="text-slate-500">ID Number</div>
+                  <div className="text-slate-500">{t("customers.profile.idNumber")}</div>
                   <div className="text-right text-slate-900">
                     {selected.idNumber || "—"}
                   </div>
 
-                  <div className="text-slate-500">Total Spent</div>
+                  <div className="text-slate-500">{t("customers.profile.totalSpent")}</div>
                   <div className="text-right text-slate-900">
                     {typeof selected.totalSpent === "number"
                       ? formatMoney(selected.totalSpent)
                       : "—"}
                   </div>
 
-                  <div className="text-slate-500">Last Purchase</div>
+                  <div className="text-slate-500">{t("customers.profile.lastPurchase")}</div>
                   <div className="text-right text-slate-900">
                     {selected.lastPurchase || "—"}
                   </div>
@@ -308,7 +310,7 @@ export default function Customers() {
 
                 <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-3">
                   <div className="text-xs font-semibold text-slate-600">
-                    Notes
+                    {t("customers.fields.notes")}
                   </div>
                   <div className="mt-1 text-slate-800">
                     {selected.notes || "—"}
@@ -322,47 +324,47 @@ export default function Customers() {
 
       {/* ADD modal */}
       <Modal
-        title="Add Customer"
+        title={t("customers.addModal.title")}
         open={addOpen}
         onClose={() => setAddOpen(false)}
       >
         <div className="grid grid-cols-1 gap-4">
-          <Field label="ID Number">
+          <Field label={t("customers.fields.idNumber")}>
             <input
               value={draft.idNumber}
               onChange={(e) => setDraft({ ...draft, idNumber: e.target.value })}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
             />
           </Field>
-          <Field label="Name">
+          <Field label={t("customers.fields.name")}>
             <input
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
             />
           </Field>
-          <Field label="Phone">
+          <Field label={t("customers.fields.phone")}>
             <input
               value={draft.phone}
               onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
             />
           </Field>
-          <Field label="City">
+          <Field label={t("customers.fields.city")}>
             <input
               value={draft.city}
               onChange={(e) => setDraft({ ...draft, city: e.target.value })}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
             />
           </Field>
-          <Field label="Email">
+          <Field label={t("customers.fields.email")}>
             <input
               value={draft.email}
               onChange={(e) => setDraft({ ...draft, email: e.target.value })}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
             />
           </Field>
-          <Field label="Notes">
+          <Field label={t("customers.fields.notes")}>
             <textarea
               value={draft.notes}
               onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
@@ -376,13 +378,13 @@ export default function Customers() {
               onClick={() => setAddOpen(false)}
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
             >
-              Cancel
+              {t("customers.addModal.cancel")}
             </button>
             <button
               onClick={onAdd}
               className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800"
             >
-              Add
+              {t("customers.addModal.save")}
             </button>
           </div>
         </div>
@@ -390,47 +392,47 @@ export default function Customers() {
 
       {/* EDIT modal */}
       <Modal
-        title="Edit Customer"
+        title={t("customers.editModal.title")}
         open={editOpen}
         onClose={() => setEditOpen(false)}
       >
         <div className="grid grid-cols-1 gap-4">
-          <Field label="ID Number">
+          <Field label={t("customers.fields.idNumber")}>
             <input
               value={draft.idNumber}
               onChange={(e) => setDraft({ ...draft, idNumber: e.target.value })}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
             />
           </Field>
-          <Field label="Name">
+          <Field label={t("customers.fields.name")}>
             <input
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
             />
           </Field>
-          <Field label="Phone">
+          <Field label={t("customers.fields.phone")}>
             <input
               value={draft.phone}
               onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
             />
           </Field>
-          <Field label="City">
+          <Field label={t("customers.fields.city")}>
             <input
               value={draft.city}
               onChange={(e) => setDraft({ ...draft, city: e.target.value })}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
             />
           </Field>
-          <Field label="Email">
+          <Field label={t("customers.fields.email")}>
             <input
               value={draft.email}
               onChange={(e) => setDraft({ ...draft, email: e.target.value })}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
             />
           </Field>
-          <Field label="Notes">
+          <Field label={t("customers.fields.notes")}>
             <textarea
               value={draft.notes}
               onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
@@ -444,13 +446,13 @@ export default function Customers() {
               onClick={() => setEditOpen(false)}
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
             >
-              Cancel
+              {t("customers.editModal.cancel")}
             </button>
             <button
               onClick={onEditSave}
               className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800"
             >
-              Save
+              {t("customers.editModal.save")}
             </button>
           </div>
         </div>

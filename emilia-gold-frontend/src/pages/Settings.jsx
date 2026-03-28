@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import PageHeader from "../ui/PageHeader";
 import Panel from "../ui/Panel";
 import { emitToast } from "../ui/toast";
 import { useAuth } from "../store/auth.store.jsx";
 import { useCurrency } from "../store/currency.store";
+import { useSettings } from "../store/settings.store";
+import { getStoreSettings, updateStoreSettings } from "../services/stores.service";
 
 function Field({ label, children, hint }) {
   return (
@@ -16,216 +19,228 @@ function Field({ label, children, hint }) {
   );
 }
 
-const LS_KEY = "eg_settings";
-
-const defaultState = {
-  profile: { name: "Fuad", phone: "052-000-0000", role: "Manager" },
-  shop: { currency: "ILS", defaultKarat: "21K", lowStockLimit: 2 },
+const defaultSettings = {
+  currency: "ILS",
+  defaultKarat: "24K",
+  defaultMarkupPerGram: 0,
+  lowStockLimit: 2,
+  minimumProfitPerGram: 0,
+  businessName: "",
+  receiptFooter: "",
+  notes: "",
 };
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { logout } = useAuth();
-  const { currency, setCurrency } = useCurrency();
+  const { logout, user } = useAuth();
+  const { setCurrency } = useCurrency();
+  const { refresh: refreshSettings } = useSettings();
+  const { t } = useTranslation();
 
-  const [profile, setProfile] = useState(defaultState.profile);
-  const [shop, setShop] = useState(defaultState.shop);
-
-  // Keep a snapshot for "Cancel"
-  const [initial, setInitial] = useState({ profile: defaultState.profile, shop: defaultState.shop });
+  const [settings, setSettings] = useState(defaultSettings);
+  const [initial, setInitial] = useState(defaultSettings);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    // Load saved settings if exist
-    try {
-      const raw = localStorage.getItem(LS_KEY);
-      if (!raw) {
-        const next = { profile: defaultState.profile, shop: { ...defaultState.shop, currency } };
-        setProfile(next.profile);
-        setShop(next.shop);
-        setInitial(next);
+    const loadSettings = async () => {
+      if (!user?.storeId) {
+        setLoading(false);
         return;
       }
-      const parsed = JSON.parse(raw);
-      const nextProfile = parsed?.profile ? { ...defaultState.profile, ...parsed.profile } : defaultState.profile;
-      const nextShop = parsed?.shop ? { ...defaultState.shop, ...parsed.shop } : defaultState.shop;
-      if (!nextShop.currency) nextShop.currency = currency;
 
-      setProfile(nextProfile);
-      setShop(nextShop);
-      setInitial({ profile: nextProfile, shop: nextShop });
-    } catch {
-      // If corrupted, reset
-      localStorage.removeItem(LS_KEY);
-      const next = { profile: defaultState.profile, shop: { ...defaultState.shop, currency } };
-      setProfile(next.profile);
-      setShop(next.shop);
-      setInitial(next);
-    }
-  }, []);
+      try {
+        setLoading(true);
+        const loaded = await getStoreSettings(user.storeId);
+        const merged = { ...defaultSettings, ...loaded };
+        setSettings(merged);
+        setInitial(merged);
+      } catch (err) {
+        emitToast({ type: "error", title: "Failed to load settings", message: err.message });
+        setSettings(defaultSettings);
+        setInitial(defaultSettings);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSettings();
+  }, [user?.storeId]);
 
   const isDirty = useMemo(() => {
-    return JSON.stringify({ profile, shop }) !== JSON.stringify(initial);
-  }, [profile, shop, initial]);
+    return JSON.stringify(settings) !== JSON.stringify(initial);
+  }, [settings, initial]);
 
-  const handleSave = () => {
-    // Basic validation
-    if (!profile.name.trim()) {
-      emitToast({ type: "error", title: "Missing", message: "Name is required." });
-      return;
-    }
-    if (!profile.phone.trim()) {
-      emitToast({ type: "error", title: "Missing", message: "Phone is required." });
-      return;
-    }
-    if (!Number.isFinite(shop.lowStockLimit) || shop.lowStockLimit < 0) {
-      emitToast({ type: "error", title: "Invalid", message: "Low stock limit must be 0 or more." });
+  const handleSave = async () => {
+    if (!user?.storeId) {
+      emitToast({ type: "error", title: t("common.error"), message: t("settings.toasts.storeIdMissing") });
       return;
     }
 
-    const payload = { profile, shop };
-    localStorage.setItem(LS_KEY, JSON.stringify(payload));
-    setInitial(payload);
-    setCurrency(shop.currency);
+    if (!Number.isFinite(settings.lowStockLimit) || settings.lowStockLimit < 0) {
+      emitToast({ type: "error", title: "Invalid", message: t("settings.toasts.invalidLowStock") });
+      return;
+    }
 
-    emitToast({ type: "success", title: "Saved", message: "Settings updated (UI)." });
+    try {
+      setSaving(true);
+      await updateStoreSettings(user.storeId, settings);
+      setInitial(settings);
+      setCurrency(settings.currency);
+      await refreshSettings();
+      emitToast({ type: "success", title: t("settings.toasts.savedTitle"), message: t("settings.toasts.savedMsg") });
+    } catch (err) {
+      emitToast({ type: "error", title: t("settings.toasts.failTitle"), message: err.message });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCancel = () => {
-    setProfile(initial.profile);
-    setShop(initial.shop);
-    emitToast({ type: "warning", title: "Cancelled", message: "Reverted unsaved changes." });
+    setSettings(initial);
+    emitToast({ type: "warning", title: t("settings.toasts.cancelledTitle"), message: t("settings.toasts.cancelledMsg") });
   };
 
   const handleLogout = () => {
-    logout(); // clears eg_user too
-    navigate("/login", { replace: true });
-  };
-
-  const handleResetDemo = () => {
-    localStorage.removeItem(LS_KEY);
     logout();
     navigate("/login", { replace: true });
   };
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Settings" subtitle="Configure profile, shop defaults and security actions." />
+      <PageHeader title={t("settings.title")} subtitle={t("settings.subtitle")} />
 
-      <Panel title="Profile" meta="UI only (mock)">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <Field label="Name">
-            <input
-              value={profile.name}
-              onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            />
-          </Field>
+      {loading ? (
+        <Panel>
+          <div className="text-center text-sm text-slate-400">{t("settings.loading")}</div>
+        </Panel>
+      ) : (
+        <>
+          <Panel title={t("settings.storeDefaults")} meta={t("settings.usedAcrossApp")}>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label={t("settings.fields.currency")} hint={t("settings.fields.currencyHint")}>
+                <select
+                  value={settings.currency}
+                  onChange={(e) => setSettings({ ...settings, currency: e.target.value })}
+                  disabled={saving}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200 disabled:bg-slate-50"
+                >
+                  <option value="USD">USD</option>
+                  <option value="ILS">ILS</option>
+                  <option value="JOD">JOD</option>
+                </select>
+              </Field>
 
-          <Field label="Phone">
-            <input
-              value={profile.phone}
-              onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            />
-          </Field>
+              <Field label={t("settings.fields.businessName")} hint={t("settings.fields.businessNameHint")}>
+                <input
+                  value={settings.businessName}
+                  onChange={(e) => setSettings({ ...settings, businessName: e.target.value })}
+                  disabled={saving}
+                  placeholder={t("settings.fields.businessNamePlaceholder")}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200 disabled:bg-slate-50"
+                />
+              </Field>
 
-          <Field label="Role" hint="Managed by backend later">
-            <input
-              value={profile.role}
-              readOnly
-              className="w-full cursor-not-allowed rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
-              title="Role will be managed by backend"
-            />
-          </Field>
-        </div>
+              <Field label={t("settings.fields.defaultKarat")} hint={t("settings.fields.defaultKaratHint")}>
+                <select
+                  value={settings.defaultKarat}
+                  onChange={(e) => setSettings({ ...settings, defaultKarat: e.target.value })}
+                  disabled={saving}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200 disabled:bg-slate-50"
+                >
+                  <option value="24K">24K</option>
+                  <option value="22K">22K</option>
+                  <option value="21K">21K</option>
+                  <option value="18K">18K</option>
+                </select>
+              </Field>
 
-        <div className="mt-4 text-sm text-slate-500">
-          These fields are local UI state for now. Later we’ll save them via API.
-        </div>
-      </Panel>
+              <Field label={t("settings.fields.defaultMarkup")} hint={t("settings.fields.defaultMarkupHint")}>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={settings.defaultMarkupPerGram}
+                  onChange={(e) => setSettings({ ...settings, defaultMarkupPerGram: Number(e.target.value) })}
+                  disabled={saving}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200 disabled:bg-slate-50"
+                />
+              </Field>
 
-      <Panel title="Shop Defaults" meta="Used across pricing & inventory">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <Field label="Currency" hint="Controls currency display across the app">
-            <select
-              value={shop.currency}
-              onChange={(e) => setShop({ ...shop, currency: e.target.value })}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            >
-              <option value="USD">USD</option>
-              <option value="ILS">ILS</option>
-              <option value="JOD">JOD</option>
-            </select>
-          </Field>
+              <Field label={t("settings.fields.lowStockLimit")} hint={t("settings.fields.lowStockLimitHint")}>
+                <input
+                  type="number"
+                  min="0"
+                  value={settings.lowStockLimit}
+                  onChange={(e) => setSettings({ ...settings, lowStockLimit: Number(e.target.value) })}
+                  disabled={saving}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200 disabled:bg-slate-50"
+                />
+              </Field>
 
-          <Field label="Default Karat" hint="Preselect karat in new sale flow">
-            <select
-              value={shop.defaultKarat}
-              onChange={(e) => setShop({ ...shop, defaultKarat: e.target.value })}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            >
-              <option value="24K">24K</option>
-              <option value="22K">22K</option>
-              <option value="21K">21K</option>
-              <option value="18K">18K</option>
-            </select>
-          </Field>
+              <Field label={t("settings.fields.minProfit")} hint={t("settings.fields.minProfitHint")}>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={settings.minimumProfitPerGram}
+                  onChange={(e) => setSettings({ ...settings, minimumProfitPerGram: Number(e.target.value) })}
+                  disabled={saving}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200 disabled:bg-slate-50"
+                />
+              </Field>
+            </div>
 
-          <Field label="Low Stock Limit" hint="Inventory marks low stock at or below this">
-            <input
-              type="number"
-              min={0}
-              value={shop.lowStockLimit}
-              onChange={(e) => setShop({ ...shop, lowStockLimit: Number(e.target.value) })}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            />
-          </Field>
-        </div>
+            <div className="mt-4">
+              <Field label={t("settings.fields.receiptFooter")} hint={t("settings.fields.receiptFooterHint")}>
+                <textarea
+                  value={settings.receiptFooter}
+                  onChange={(e) => setSettings({ ...settings, receiptFooter: e.target.value })}
+                  disabled={saving}
+                  rows={2}
+                  placeholder={t("settings.fields.receiptFooterPlaceholder")}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200 disabled:bg-slate-50 resize-none"
+                />
+              </Field>
+            </div>
 
-        <div className="mt-4 flex items-center gap-3">
-          <button
-            onClick={handleSave}
-            disabled={!isDirty}
-            className={`rounded-lg px-4 py-2 text-sm font-semibold text-white ${isDirty ? "bg-amber-700 hover:bg-amber-800" : "bg-slate-300 cursor-not-allowed"
-              }`}
-          >
-            Save (UI)
-          </button>
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                onClick={handleSave}
+                disabled={!isDirty || saving}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold text-white ${isDirty && !saving
+                  ? "bg-amber-700 hover:bg-amber-800"
+                  : "bg-slate-300 cursor-not-allowed"
+                  }`}
+              >
+                {saving ? t("settings.saving") : t("settings.saveBtn")}
+              </button>
 
-          <button
-            onClick={handleCancel}
-            disabled={!isDirty}
-            className={`rounded-lg border px-4 py-2 text-sm font-semibold ${isDirty
-              ? "border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
-              : "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed"
-              }`}
-          >
-            Cancel
-          </button>
-        </div>
-      </Panel>
+              <button
+                onClick={handleCancel}
+                disabled={!isDirty || saving}
+                className={`rounded-lg border px-4 py-2 text-sm font-semibold ${isDirty && !saving
+                  ? "border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
+                  : "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed"
+                  }`}
+              >
+                {t("settings.cancelBtn")}
+              </button>
+            </div>
+          </Panel>
 
-      <Panel title="Danger Zone" meta="Be careful">
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <button
-            onClick={handleLogout}
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-          >
-            Logout
-          </button>
-
-          <button
-            onClick={handleResetDemo}
-            className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700"
-          >
-            Reset Demo (Logout + Clear Token)
-          </button>
-        </div>
-
-        <div className="mt-3 text-sm text-slate-500">
-          This only affects local demo state. Real reset will be handled by backend later.
-        </div>
-      </Panel>
+          <Panel title={t("settings.dangerZone")} meta={t("settings.beCareful")}>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleLogout}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+              >
+                {t("settings.logoutBtn")}
+              </button>
+            </div>
+          </Panel>
+        </>
+      )}
     </div>
   );
 }

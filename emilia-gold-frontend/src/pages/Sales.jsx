@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import PageHeader from "../ui/PageHeader";
 import Panel from "../ui/Panel";
 import Table from "../ui/Table";
 import StatusPill from "../ui/StatusPill";
 import { emitToast } from "../ui/toast";
 import { useCurrency } from "../store/currency.store";
+import { useSettings } from "../store/settings.store";
 import { listProducts } from "../services/products.service";
 import { createSale, listSales } from "../services/sales.service";
 import { apiGet } from "../services/apiClient";
@@ -20,7 +22,7 @@ function todayISODate() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function newLineItem() {
+function newLineItem(defaultMarkup = 0) {
   return {
     _rowId: crypto.randomUUID(),
     productId: "",
@@ -28,7 +30,7 @@ function newLineItem() {
     quantitySold: 1,
     soldWeight: "",
     baseGoldPricePerGram: "",
-    markupPerGram: "",
+    markupPerGram: defaultMarkup || 0,
     extraProfitPerGram: "",
     minimumPricePerGram: 0,
     finalPricePerGram: 0,
@@ -40,14 +42,14 @@ function newLineItem() {
   };
 }
 
-function emptyDraft() {
+function emptyDraft(defaultMarkup = 0) {
   return {
     date: todayISODate(),
     customerId: "",
     paymentMethod: "Cash",
     paymentStatus: "Paid",
     notes: "",
-    items: [newLineItem()],
+    items: [newLineItem(defaultMarkup)],
   };
 }
 
@@ -77,6 +79,8 @@ function Field({ label, required, children }) {
 
 export default function Sales() {
   const { formatMoney } = useCurrency();
+  const { settings } = useSettings();
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // ── list state
@@ -92,7 +96,7 @@ export default function Sales() {
 
   // ── add-sale modal
   const [addOpen, setAddOpen] = useState(false);
-  const [draft, setDraft] = useState(emptyDraft());
+  const [draft, setDraft] = useState(() => emptyDraft(settings.defaultMarkupPerGram));
   const [draftErrors, setDraftErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
@@ -158,18 +162,18 @@ export default function Sales() {
   // Open modal when ?new=1 is in URL
   useEffect(() => {
     if (searchParams.get("new") === "1" && !addOpen) {
-      setDraft(emptyDraft());
+      setDraft(emptyDraft(settings.defaultMarkupPerGram));
       setDraftErrors({});
       setAddOpen(true);
     }
-  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchParams, settings.defaultMarkupPerGram]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─────────────────────────────────────────────────────────────────────────
   // Modal handlers
   // ─────────────────────────────────────────────────────────────────────────
 
   function openAdd() {
-    setDraft(emptyDraft());
+    setDraft(emptyDraft(settings.defaultMarkupPerGram));
     setDraftErrors({});
     setAddOpen(true);
   }
@@ -385,12 +389,12 @@ export default function Sales() {
   // ─────────────────────────────────────────────────────────────────────────
 
   const columns = [
-    { key: "id", header: "Invoice #" },
-    { key: "date", header: "Date" },
-    { key: "customer", header: "Customer" },
+    { key: "id", header: t("sales.table.invoice") },
+    { key: "date", header: t("sales.table.date") },
+    { key: "customer", header: t("sales.table.customer") },
     {
       key: "itemCount",
-      header: "Items",
+      header: t("sales.table.items"),
       render: (r) => (
         <button
           onClick={() => setExpandedId((prev) => (prev === r._id ? null : r._id))}
@@ -400,9 +404,9 @@ export default function Sales() {
         </button>
       ),
     },
-    { key: "amount", header: "Total", render: (r) => formatMoney(r.amount) },
-    { key: "method", header: "Payment" },
-    { key: "status", header: "Status", render: (r) => <StatusPill value={r.status} /> },
+    { key: "amount", header: t("sales.table.amount"), render: (r) => formatMoney(r.amount) },
+    { key: "method", header: t("sales.table.method") },
+    { key: "status", header: t("sales.table.status"), render: (r) => <StatusPill value={r.status} /> },
   ];
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -412,18 +416,18 @@ export default function Sales() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Sales"
-        subtitle="Track transactions, payment statuses and receipts."
+        title={t("sales.title")}
+        subtitle={t("sales.subtitle")}
         right={
           <>
             <button className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50">
-              Export
+              {t("sales.export")}
             </button>
             <button
               onClick={openAdd}
               className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800"
             >
-              + New Sale
+              {t("sales.newSale")}
             </button>
           </>
         }
@@ -436,7 +440,7 @@ export default function Sales() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search by invoice # or customer…"
+              placeholder={t("sales.search")}
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
             />
             <select
@@ -444,21 +448,21 @@ export default function Sales() {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
             >
-              <option>All</option>
-              <option>Paid</option>
-              <option>Pending</option>
-              <option>Refunded</option>
+              <option value="All">{t("sales.status.all")}</option>
+              <option value="Paid">{t("sales.status.paid")}</option>
+              <option value="Pending">{t("sales.status.pending")}</option>
+              <option value="Refunded">{t("sales.status.refunded")}</option>
             </select>
           </div>
-          <div className="text-sm text-slate-500">{rows.length} results</div>
+          <div className="text-sm text-slate-500">{t("sales.results", { count: rows.length })}</div>
         </div>
 
         <div className="mt-4">
           {loading ? (
-            <div className="p-10 text-center text-sm text-slate-400">Loading sales…</div>
+            <div className="p-10 text-center text-sm text-slate-400">{t("sales.loading")}</div>
           ) : rows.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-500">
-              No sales found. Try changing filters or create a new sale.
+              {t("sales.empty")}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -468,16 +472,16 @@ export default function Sales() {
                   {expandedId === row._id && (
                     <div className="mb-2 rounded-b-xl border border-t-0 border-slate-200 bg-slate-50 px-4 py-3">
                       <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                        Line Items
+                        {t("sales.table.lineItems")}
                       </div>
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b border-slate-200 text-slate-400">
-                            <th className="pb-1 text-left font-normal">Product</th>
-                            <th className="pb-1 text-center font-normal">Qty</th>
-                            <th className="pb-1 text-center font-normal">Weight</th>
-                            <th className="pb-1 text-center font-normal">Price/g</th>
-                            <th className="pb-1 text-right font-normal">Line Total</th>
+                            <th className="pb-1 text-left font-normal">{t("sales.table.product")}</th>
+                            <th className="pb-1 text-center font-normal">{t("sales.table.qty")}</th>
+                            <th className="pb-1 text-center font-normal">{t("sales.table.weight")}</th>
+                            <th className="pb-1 text-center font-normal">{t("sales.table.pricePerG")}</th>
+                            <th className="pb-1 text-right font-normal">{t("sales.table.lineTotal")}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -509,9 +513,9 @@ export default function Sales() {
 
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
               <div>
-                <div className="text-lg font-bold text-slate-900">New Sale</div>
+                <div className="text-lg font-bold text-slate-900">{t("sales.modal.title")}</div>
                 <div className="mt-0.5 text-xs text-slate-400">
-                  Fill in customer, items and payment details
+                  {t("sales.modal.subtitle")}
                 </div>
               </div>
               <button
@@ -526,10 +530,10 @@ export default function Sales() {
 
               {/* 1. Customer */}
               <div className="space-y-3">
-                <SectionLabel>Customer</SectionLabel>
+                <SectionLabel>{t("sales.modal.customer")}</SectionLabel>
                 <div className="flex items-end gap-2">
                   <div className="flex-1">
-                    <Field label="Select customer" required>
+                    <Field label={t("sales.modal.customer")} required>
                       <select
                         value={draft.customerId}
                         onChange={(e) => setDraftField("customerId", e.target.value)}
@@ -537,7 +541,7 @@ export default function Sales() {
                         className={inputCls + (draftErrors.customerId ? " border-red-400" : "")}
                       >
                         <option value="">
-                          {lookupsLoading ? "Loading…" : "— Choose customer —"}
+                          {lookupsLoading ? t("common.loading") : t("sales.modal.chooseCustomer")}
                         </option>
                         {customers.map((c) => (
                           <option key={c._id} value={c._id}>
@@ -556,7 +560,7 @@ export default function Sales() {
                     disabled={saving}
                     className="shrink-0 rounded-lg border border-dashed border-amber-400 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50"
                   >
-                    + New Customer
+                    {t("sales.modal.quickCreate")}
                   </button>
                 </div>
                 {selectedCustomer && (
@@ -570,7 +574,7 @@ export default function Sales() {
 
               {/* 2. Date */}
               <div>
-                <Field label="Sale date" required>
+                <Field label={t("sales.modal.saleDate")} required>
                   <input
                     type="date"
                     value={draft.date}
@@ -583,7 +587,7 @@ export default function Sales() {
 
               {/* 3. Items */}
               <div className="space-y-3">
-                <SectionLabel>Sale Items</SectionLabel>
+                <SectionLabel>{t("sales.modal.items")}</SectionLabel>
                 {draftErrors.items && (
                   <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                     {draftErrors.items}
@@ -603,15 +607,15 @@ export default function Sales() {
 
               {/* 4. Totals */}
               <div className="space-y-2">
-                <SectionLabel>Totals</SectionLabel>
+                <SectionLabel>{t("sales.modal.totals")}</SectionLabel>
                 <SaleTotalsCard items={draft.items} currency={{ formatMoney }} />
               </div>
 
               {/* 5. Payment */}
               <div className="space-y-3">
-                <SectionLabel>Payment</SectionLabel>
+                <SectionLabel>{t("sales.modal.payment")}</SectionLabel>
                 <div className="grid grid-cols-2 gap-4">
-                  <Field label="Payment method">
+                  <Field label={t("sales.modal.paymentMethod")}>
                     <select
                       value={draft.paymentMethod}
                       onChange={(e) => setDraftField("paymentMethod", e.target.value)}
@@ -624,7 +628,7 @@ export default function Sales() {
                       <option>Other</option>
                     </select>
                   </Field>
-                  <Field label="Status">
+                  <Field label={t("sales.modal.paymentStatus")}>
                     <select
                       value={draft.paymentStatus}
                       onChange={(e) => setDraftField("paymentStatus", e.target.value)}
@@ -641,12 +645,12 @@ export default function Sales() {
 
               {/* 6. Notes */}
               <div className="space-y-2">
-                <SectionLabel>Notes</SectionLabel>
+                <SectionLabel>{t("sales.modal.notes")}</SectionLabel>
                 <textarea
                   value={draft.notes}
                   onChange={(e) => setDraftField("notes", e.target.value)}
                   rows={2}
-                  placeholder="Optional sale notes…"
+                  placeholder={t("sales.modal.notesPlaceholder")}
                   disabled={saving}
                   className={inputCls + " resize-none"}
                 />
@@ -660,7 +664,7 @@ export default function Sales() {
                 disabled={saving}
                 className="rounded-xl border border-slate-200 px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 type="button"
@@ -668,7 +672,7 @@ export default function Sales() {
                 disabled={saving || !canSubmit}
                 className="rounded-xl bg-amber-700 px-6 py-2 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-50"
               >
-                {saving ? "Saving…" : "Save Sale"}
+                {saving ? t("sales.modal.submitting") : t("sales.modal.saveSale")}
               </button>
             </div>
           </div>

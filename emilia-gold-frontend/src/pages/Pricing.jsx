@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import PageHeader from "../ui/PageHeader";
 import Panel from "../ui/Panel";
 import {
@@ -20,6 +21,7 @@ function fmtMoney(code, n) {
 
 export default function Pricing() {
   const { currency, setCurrency } = useCurrency();
+  const { t } = useTranslation();
   const [spotUsdPerOz, setSpotUsdPerOz] = useState(SPOT_USD_PER_OZ);
   const [updatedAt, setUpdatedAt] = useState(null);
   const [loadingSpot, setLoadingSpot] = useState(false);
@@ -81,8 +83,8 @@ export default function Pricing() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Pricing"
-        subtitle="Gold spot price, karat breakdown, and currency conversions."
+        title={t("pricing.title")}
+        subtitle={t("pricing.subtitle")}
         right={
           <select
             value={currency}
@@ -98,23 +100,23 @@ export default function Pricing() {
 
       {/* Top summary cards */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Panel title="Spot Price" meta="Per troy ounce">
+        <Panel title={t("pricing.spotPrice")} meta={t("pricing.perTroyOunce")}>
           <div className="text-3xl font-semibold text-slate-900">
             {fmtMoney(currency, spotPerOz)}
           </div>
           <div className="mt-2 text-sm text-slate-500">
-            Base: {fmtMoney("USD", spotUsdPerOz)} / oz
+            {t("pricing.base")} {fmtMoney("USD", spotUsdPerOz)} {t("pricing.perOz")}
           </div>
           <div className="mt-1 text-xs text-slate-400">
             {loadingSpot
-              ? "Updating live market price..."
+              ? t("pricing.updatingLive")
               : updatedAt
-                ? `Live update: ${new Date(updatedAt).toLocaleString()}`
-                : "Using fallback price (live source unavailable)"}
+                ? t("pricing.liveUpdate", { time: new Date(updatedAt).toLocaleString() })
+                : t("pricing.usingFallback")}
           </div>
         </Panel>
 
-        <Panel title="24K Price" meta="Per gram">
+        <Panel title={t("pricing.price24k")} meta={t("pricing.perGram")}>
           <div className="text-3xl font-semibold text-slate-900">
             {fmtMoney(currency, price24kPerGram)}
           </div>
@@ -123,7 +125,7 @@ export default function Pricing() {
           </div>
         </Panel>
 
-        <Panel title="Exchange Rates" meta="Mock (replace later)">
+        <Panel title={t("pricing.exchangeRates")} meta={t("pricing.mockRates")}>
           <div className="space-y-2 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-slate-500">USD → ILS</span>
@@ -138,7 +140,7 @@ export default function Pricing() {
       </div>
 
       {/* Karat breakdown */}
-      <Panel title="Karat Breakdown" meta="Price per gram">
+      <Panel title={t("pricing.karatBreakdown")} meta={t("pricing.pricePerGram")}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {karatCards.map((c) => (
             <div
@@ -150,22 +152,21 @@ export default function Pricing() {
                 {fmtMoney(currency, c.perGram)}
               </div>
               <div className="mt-1 text-xs text-slate-400">
-                Ratio: {KARAT_RATIO[c.k].toFixed(4)}
+                {t("pricing.ratio")} {KARAT_RATIO[c.k].toFixed(4)}
               </div>
             </div>
           ))}
         </div>
       </Panel>
 
-      {/* History (simple list for now; chart later) */}
-      <Panel title="Price History" meta="Last 6 days (mock)">
+      <Panel title={t("pricing.priceHistory")} meta={t("pricing.last6Days")}>
         <div className="overflow-hidden rounded-xl border border-slate-200">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-600">
               <tr>
-                <th className="px-4 py-3 text-left font-medium">Date</th>
+                <th className="px-4 py-3 text-left font-medium">{t("pricing.date")}</th>
                 <th className="px-4 py-3 text-left font-medium">
-                  Spot ({currency})
+                  {t("pricing.spotCol", { currency })}
                 </th>
               </tr>
             </thead>

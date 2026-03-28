@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { apiPost } from "../../services/apiClient";
 
 const INPUT =
@@ -21,6 +22,7 @@ export default function QuickCreateCustomerModal({ open, onClose, onCreated }) {
     const [form, setForm] = useState(empty);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
+    const { t } = useTranslation();
 
     if (!open) return null;
 
@@ -87,9 +89,9 @@ export default function QuickCreateCustomerModal({ open, onClose, onCreated }) {
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
                     <div>
-                        <div className="text-base font-semibold text-slate-900">New Customer</div>
+                        <div className="text-base font-semibold text-slate-900">{t("sales.quickCreate.title")}</div>
                         <div className="text-xs text-slate-400">
-                            Quick-create and auto-attach to this sale
+                            {t("sales.quickCreate.subtitle")}
                         </div>
                     </div>
                     <button
@@ -111,7 +113,7 @@ export default function QuickCreateCustomerModal({ open, onClose, onCreated }) {
                     {/* Name */}
                     <div className="space-y-1">
                         <label className="text-xs font-medium text-slate-600">
-                            ID Number <span className="text-red-500">*</span>
+                            {t("sales.quickCreate.idNumber")} <span className="text-red-500">*</span>
                         </label>
                         <input
                             value={form.idNumber}
@@ -129,7 +131,7 @@ export default function QuickCreateCustomerModal({ open, onClose, onCreated }) {
                     {/* Name */}
                     <div className="space-y-1">
                         <label className="text-xs font-medium text-slate-600">
-                            Full Name <span className="text-red-500">*</span>
+                            {t("sales.quickCreate.name")} <span className="text-red-500">*</span>
                         </label>
                         <input
                             value={form.name}
@@ -146,7 +148,7 @@ export default function QuickCreateCustomerModal({ open, onClose, onCreated }) {
                     {/* Phone */}
                     <div className="space-y-1">
                         <label className="text-xs font-medium text-slate-600">
-                            Phone <span className="text-red-500">*</span>
+                            {t("sales.quickCreate.phone")} <span className="text-red-500">*</span>
                         </label>
                         <input
                             value={form.phone}
@@ -164,8 +166,7 @@ export default function QuickCreateCustomerModal({ open, onClose, onCreated }) {
                     {/* Email */}
                     <div className="space-y-1">
                         <label className="text-xs font-medium text-slate-600">
-                            Email{" "}
-                            <span className="text-slate-400 font-normal">(optional, needed for receipt)</span>
+                            {t("sales.quickCreate.email")}
                         </label>
                         <input
                             value={form.email}
@@ -182,7 +183,7 @@ export default function QuickCreateCustomerModal({ open, onClose, onCreated }) {
 
                     {/* Notes */}
                     <div className="space-y-1">
-                        <label className="text-xs font-medium text-slate-600">Notes (optional)</label>
+                        <label className="text-xs font-medium text-slate-600">{t("sales.quickCreate.notes")}</label>
                         <textarea
                             value={form.notes}
                             onChange={(e) => set("notes", e.target.value)}
@@ -201,14 +202,14 @@ export default function QuickCreateCustomerModal({ open, onClose, onCreated }) {
                             disabled={saving}
                             className="flex-1 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                         >
-                            Cancel
+                            {t("common.cancel")}
                         </button>
                         <button
                             type="submit"
                             disabled={saving}
                             className="flex-1 rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-50"
                         >
-                            {saving ? "Creating…" : "Create & Select"}
+                            {saving ? t("sales.quickCreate.creating") : t("sales.quickCreate.createBtn")}
                         </button>
                     </div>
                 </form>

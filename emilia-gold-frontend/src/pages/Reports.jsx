@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import PageHeader from "../ui/PageHeader";
 import Panel from "../ui/Panel";
 import Table from "../ui/Table";
@@ -18,6 +19,7 @@ function Kpi({ title, value, sub }) {
 
 export default function Reports() {
   const { formatMoney } = useCurrency();
+  const { t } = useTranslation();
   // Filter state: report type
   const [type, setType] = useState("All");
 
@@ -50,51 +52,51 @@ export default function Reports() {
 
   // Table columns
   const columns = [
-    { key: "date", header: "Date" },
-    { key: "type", header: "Type" },
-    { key: "count", header: "Count" },
+    { key: "date", header: t("reports.table.date") },
+    { key: "type", header: t("reports.table.type") },
+    { key: "count", header: t("reports.table.count") },
     {
       key: "amount",
-      header: "Amount",
+      header: t("reports.table.amount"),
       render: (r) => (r.amount ? formatMoney(r.amount) : "—"),
     },
-    { key: "note", header: "Note" },
+    { key: "note", header: t("reports.table.note") },
   ];
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Reports"
-        subtitle="Filter and export operational summaries."
+        title={t("reports.title")}
+        subtitle={t("reports.subtitle")}
         right={
           <button className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50">
-            Export (UI)
+            {t("reports.exportBtn")}
           </button>
         }
       />
 
       {/* Filters */}
-      <Panel title="Filters" meta="Mock data for now">
+      <Panel title={t("reports.filters")} meta={t("reports.mockData")}>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <div className="md:col-span-2">
             <label className="mb-1 block text-xs font-medium text-slate-500">
-              Report Type
+              {t("reports.reportType")}
             </label>
             <select
               value={type}
               onChange={(e) => setType(e.target.value)}
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
             >
-              <option>All</option>
-              <option>Sales</option>
-              <option>Inventory</option>
-              <option>Customers</option>
+              <option value="All">{t("reports.types.all")}</option>
+              <option value="Sales">{t("reports.types.sales")}</option>
+              <option value="Inventory">{t("reports.types.inventory")}</option>
+              <option value="Customers">{t("reports.types.customers")}</option>
             </select>
           </div>
 
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">
-              From
+              {t("reports.from")}
             </label>
             <input
               type="date"
@@ -106,7 +108,7 @@ export default function Reports() {
 
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">
-              To
+              {t("reports.to")}
             </label>
             <input
               type="date"
@@ -120,16 +122,16 @@ export default function Reports() {
 
       {/* KPI Summary */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Kpi title="Rows" value={kpis.totalRows} sub="Matching current filters" />
-        <Kpi title="Total Count" value={kpis.totalCount} sub="Sum of counts" />
-        <Kpi title="Total Amount" value={formatMoney(kpis.totalAmount)} sub="Sales only rows contribute" />
+        <Kpi title={t("reports.kpis.reportLines")} value={kpis.totalRows} sub={t("reports.filteredResults")} />
+        <Kpi title={t("reports.kpis.totalTransactions")} value={kpis.totalCount} sub="" />
+        <Kpi title={t("reports.kpis.totalAmount")} value={formatMoney(kpis.totalAmount)} sub="" />
       </div>
 
       {/* Results table */}
-      <Panel title="Results" meta={`${rows.length} rows`}>
+      <Panel title={t("reports.data")} meta={`${rows.length} rows`}>
         {rows.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-500">
-            No results for these filters.
+            {t("common.noData")}
           </div>
         ) : (
           <div className="overflow-x-auto">

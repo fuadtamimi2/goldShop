@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import PageHeader from "../ui/PageHeader";
 import Panel from "../ui/Panel";
 import Table from "../ui/Table";
 import StatusPill from "../ui/StatusPill";
 import { emitToast } from "../ui/toast";
 import { useCurrency } from "../store/currency.store";
+import { useSettings } from "../store/settings.store";
 import {
   createProduct,
   deleteProduct,
@@ -45,9 +47,10 @@ function Field({ label, children }) {
 
 export default function Inventory() {
   const { formatMoney } = useCurrency();
+  const { settings } = useSettings();
+  const { t } = useTranslation();
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("All");
-  const LOW_LIMIT = 2;
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -148,7 +151,7 @@ export default function Inventory() {
       });
       setAddOpen(false);
       await loadProducts();
-      emitToast({ type: "success", title: "Item added", message: draft.name });
+      emitToast({ type: "success", title: t("inventory.toasts.addedTitle"), message: draft.name });
     } catch (err) {
       setErrorText(err.message || "Failed to save.");
     } finally {
@@ -176,7 +179,7 @@ export default function Inventory() {
       setEditOpen(false);
       setSelectedId(null);
       await loadProducts();
-      emitToast({ type: "success", title: "Item updated", message: draft.name });
+      emitToast({ type: "success", title: t("inventory.toasts.updatedTitle"), message: draft.name });
     } catch (err) {
       setErrorText(err.message || "Failed to save.");
     } finally {
@@ -185,16 +188,16 @@ export default function Inventory() {
   }
 
   async function onDelete(item) {
-    const ok = confirm(`Delete ${item.name}?`);
+    const ok = confirm(t("inventory.deleteConfirm", { name: item.name }));
     if (!ok) return;
 
     try {
       setSaving(true);
       await deleteProduct(item._id);
       setProducts((prev) => prev.filter((p) => p._id !== item._id));
-      emitToast({ type: "success", title: "Item deleted", message: item.name });
+      emitToast({ type: "success", title: t("inventory.toasts.deletedTitle"), message: item.name });
     } catch (err) {
-      emitToast({ type: "error", title: "Delete failed", message: err.message });
+      emitToast({ type: "error", title: t("inventory.toasts.deleteFailed"), message: err.message });
     } finally {
       setSaving(false);
     }
@@ -202,15 +205,15 @@ export default function Inventory() {
 
 
   const columns = [
-    { key: "sku", header: "SKU", render: (r) => r.sku || "—" },
-    { key: "name", header: "Product" },
-    { key: "category", header: "Category", render: (r) => r.category || "—" },
+    { key: "sku", header: t("inventory.table.sku"), render: (r) => r.sku || "—" },
+    { key: "name", header: t("inventory.table.name") },
+    { key: "category", header: t("inventory.table.category"), render: (r) => r.category || "—" },
     { key: "productType", header: "Type", render: (r) => r.productType || "—" },
-    { key: "karat", header: "Karat", render: (r) => r.karat || "—" },
-    { key: "quantity", header: "Qty", render: (r) => r.quantity || 0 },
+    { key: "karat", header: t("inventory.table.karat"), render: (r) => r.karat || "—" },
+    { key: "quantity", header: t("inventory.table.qty"), render: (r) => r.quantity || 0 },
     {
       key: "totalWeight",
-      header: "Total Weight",
+      header: t("inventory.table.weight"),
       render: (r) =>
         r.quantity && r.quantity > 0 ? `${Number(r.totalWeight || 0).toFixed(2)} g` : "—",
     },
@@ -226,30 +229,30 @@ export default function Inventory() {
     },
     {
       key: "status",
-      header: "Status",
+      header: t("inventory.table.status"),
       render: (r) => {
         const qty = Number(r.quantity) || 0;
         if (qty === 0) return <StatusPill value="Out of stock" />;
-        if (qty <= LOW_LIMIT) return <StatusPill value="Low stock" />;
+        if (qty <= settings.lowStockLimit) return <StatusPill value="Low stock" />;
         return <StatusPill value="In stock" />;
       },
     },
     {
       key: "actions",
-      header: "Actions",
+      header: t("inventory.table.actions"),
       render: (r) => (
         <div className="flex gap-1">
           <button
             onClick={() => openEdit(r._id)}
             className="roundedlg px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
           >
-            Edit
+            {t("inventory.editBtn")}
           </button>
           <button
             onClick={() => onDelete(r)}
             className="rounded-lg px-2 py-1 text-xs text-red-600 hover:bg-red-50"
           >
-            Delete
+            {t("inventory.deleteBtn")}
           </button>
         </div>
       ),
@@ -259,14 +262,14 @@ export default function Inventory() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Inventory"
-        subtitle="Grouped gold inventory with total weight tracking per group."
+        title={t("inventory.title")}
+        subtitle={t("inventory.subtitle")}
         right={
           <button
             onClick={openAdd}
             className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800"
           >
-            + New Item
+            {t("inventory.newItem")}
           </button>
         }
       />
@@ -277,7 +280,7 @@ export default function Inventory() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search by name or SKU…"
+              placeholder={t("inventory.searchPlaceholder")}
               className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
             />
 
@@ -294,7 +297,7 @@ export default function Inventory() {
             </select>
           </div>
 
-          <div className="text-sm text-slate-500">{rows.length} items</div>
+          <div className="text-sm text-slate-500">{rows.length} {t("inventory.table.name")}</div>
         </div>
 
         {errorText ? (
@@ -306,11 +309,11 @@ export default function Inventory() {
         <div className="mt-4">
           {loading ? (
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-10 text-center text-sm text-slate-500">
-              Loading inventory...
+              {t("inventory.loading")}
             </div>
           ) : rows.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-500">
-              No items found. Try changing filters.
+              {t("inventory.empty")}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -320,17 +323,17 @@ export default function Inventory() {
         </div>
       </Panel>
 
-      <Modal title="Add Item" open={addOpen} onClose={() => setAddOpen(false)}>
+      <Modal title={t("inventory.addModal.title")} open={addOpen} onClose={() => setAddOpen(false)}>
         <div className="grid grid-cols-1 gap-4">
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Name">
+            <Field label={t("inventory.fields.name")}>
               <input
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
               />
             </Field>
-            <Field label="SKU">
+            <Field label={t("inventory.fields.sku")}>
               <input
                 value={draft.sku}
                 onChange={(e) => setDraft({ ...draft, sku: e.target.value })}
@@ -340,14 +343,14 @@ export default function Inventory() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Category">
+            <Field label={t("inventory.fields.category")}>
               <input
                 value={draft.category}
                 onChange={(e) => setDraft({ ...draft, category: e.target.value })}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
               />
             </Field>
-            <Field label="Type">
+            <Field label={t("inventory.fields.productType")}>
               <input
                 value={draft.productType}
                 onChange={(e) => setDraft({ ...draft, productType: e.target.value })}
@@ -357,7 +360,7 @@ export default function Inventory() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Karat">
+            <Field label={t("inventory.fields.karat")}>
               <input
                 value={draft.karat}
                 onChange={(e) => setDraft({ ...draft, karat: e.target.value })}
@@ -365,7 +368,7 @@ export default function Inventory() {
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
               />
             </Field>
-            <Field label="Quantity">
+            <Field label={t("inventory.fields.quantity")}>
               <input
                 type="number"
                 min="0"
@@ -377,7 +380,7 @@ export default function Inventory() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Total Weight (g)">
+            <Field label={t("inventory.fields.totalWeight")}>
               <input
                 type="number"
                 step="0.01"
@@ -387,7 +390,7 @@ export default function Inventory() {
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
               />
             </Field>
-            <Field label="Markup / g">
+            <Field label={t("inventory.fields.markupPerGram")}>
               <input
                 type="number"
                 step="0.01"
@@ -399,7 +402,7 @@ export default function Inventory() {
             </Field>
           </div>
 
-          <Field label="Base Cost / g">
+          <Field label={t("inventory.fields.baseCostPerGram")}>
             <input
               type="number"
               step="0.01"
@@ -410,7 +413,7 @@ export default function Inventory() {
             />
           </Field>
 
-          <Field label="Notes">
+          <Field label={t("inventory.fields.notes")}>
             <textarea
               value={draft.notes}
               onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
@@ -424,30 +427,30 @@ export default function Inventory() {
               onClick={() => setAddOpen(false)}
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               onClick={onSaveAdd}
               disabled={saving}
               className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-60"
             >
-              {saving ? "Saving…" : "Add Item"}
+              {saving ? t("inventory.saving") : t("inventory.addModal.title")}
             </button>
           </div>
         </div>
       </Modal>
 
-      <Modal title="Edit Item" open={editOpen} onClose={() => setEditOpen(false)}>
+      <Modal title={t("inventory.editModal.title")} open={editOpen} onClose={() => setEditOpen(false)}>
         <div className="grid grid-cols-1 gap-4">
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Name">
+            <Field label={t("inventory.fields.name")}>
               <input
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
               />
             </Field>
-            <Field label="SKU">
+            <Field label={t("inventory.fields.sku")}>
               <input
                 value={draft.sku}
                 onChange={(e) => setDraft({ ...draft, sku: e.target.value })}
@@ -457,14 +460,14 @@ export default function Inventory() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Category">
+            <Field label={t("inventory.fields.category")}>
               <input
                 value={draft.category}
                 onChange={(e) => setDraft({ ...draft, category: e.target.value })}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
               />
             </Field>
-            <Field label="Type">
+            <Field label={t("inventory.fields.productType")}>
               <input
                 value={draft.productType}
                 onChange={(e) => setDraft({ ...draft, productType: e.target.value })}
@@ -474,14 +477,14 @@ export default function Inventory() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Karat">
+            <Field label={t("inventory.fields.karat")}>
               <input
                 value={draft.karat}
                 onChange={(e) => setDraft({ ...draft, karat: e.target.value })}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
               />
             </Field>
-            <Field label="Quantity">
+            <Field label={t("inventory.fields.quantity")}>
               <input
                 type="number"
                 min="0"
@@ -493,7 +496,7 @@ export default function Inventory() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Total Weight (g)">
+            <Field label={t("inventory.fields.totalWeight")}>
               <input
                 type="number"
                 step="0.01"
@@ -503,7 +506,7 @@ export default function Inventory() {
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
               />
             </Field>
-            <Field label="Markup / g">
+            <Field label={t("inventory.fields.markupPerGram")}>
               <input
                 type="number"
                 step="0.01"
@@ -515,7 +518,7 @@ export default function Inventory() {
             </Field>
           </div>
 
-          <Field label="Base Cost / g">
+          <Field label={t("inventory.fields.baseCostPerGram")}>
             <input
               type="number"
               step="0.01"
@@ -526,7 +529,7 @@ export default function Inventory() {
             />
           </Field>
 
-          <Field label="Notes">
+          <Field label={t("inventory.fields.notes")}>
             <textarea
               value={draft.notes}
               onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
@@ -540,14 +543,14 @@ export default function Inventory() {
               onClick={() => setEditOpen(false)}
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               onClick={onSaveEdit}
               disabled={saving}
               className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-60"
             >
-              {saving ? "Saving…" : "Save Changes"}
+              {saving ? t("inventory.saving") : t("common.save")}
             </button>
           </div>
         </div>

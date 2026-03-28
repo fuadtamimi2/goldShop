@@ -11,6 +11,7 @@ const customersRoutes = require("./routes/customers.routes");
 const productsRoutes = require("./routes/products.routes");
 const salesRoutes = require("./routes/sales.routes");
 const goldPurchasesRoutes = require("./routes/goldPurchases.routes");
+const storesRoutes = require("./routes/stores.routes");
 
 const errorHandler = require("./middleware/errorHandler");
 
@@ -72,6 +73,7 @@ app.use("/api/customers", customersRoutes);
 app.use("/api/products", productsRoutes);
 app.use("/api/sales", salesRoutes);
 app.use("/api/gold-purchases", goldPurchasesRoutes);
+app.use("/api/stores", storesRoutes);
 
 // Health check route
 app.get("/api/health", (req, res) => {

@@ -1,9 +1,11 @@
 import { emailReceipt } from "../../services/sales.service";
 import { emitToast } from "../../ui/toast";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 export default function ReceiptPreviewModal({ open, onClose, receipt, saleId }) {
     const [emailing, setEmailing] = useState(false);
+    const { t } = useTranslation();
 
     if (!open || !receipt) return null;
 
@@ -42,7 +44,7 @@ export default function ReceiptPreviewModal({ open, onClose, receipt, saleId }) 
 
                 {/* Header buttons */}
                 <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 print:hidden">
-                    <div className="text-sm font-semibold text-slate-700">Receipt / Invoice</div>
+                    <div className="text-sm font-semibold text-slate-700">{t("sales.receipt.invoiceTitle")}</div>
                     <div className="flex items-center gap-2">
                         {receipt.customer?.email && (
                             <button
@@ -50,14 +52,14 @@ export default function ReceiptPreviewModal({ open, onClose, receipt, saleId }) 
                                 disabled={emailing}
                                 className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                             >
-                                {emailing ? "Sending..." : "Email Receipt"}
+                                {emailing ? t("sales.receipt.sending") : t("sales.receipt.emailBtn")}
                             </button>
                         )}
                         <button
                             onClick={handlePrint}
                             className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                         >
-                            Print
+                            {t("sales.receipt.print")}
                         </button>
                         <button
                             onClick={onClose}
@@ -89,11 +91,11 @@ export default function ReceiptPreviewModal({ open, onClose, receipt, saleId }) 
                     {/* Invoice meta */}
                     <div className="flex justify-between">
                         <div>
-                            <div className="text-xs text-slate-400">Invoice #</div>
+                            <div className="text-xs text-slate-400">{t("sales.receipt.invoiceNo")}</div>
                             <div className="font-semibold">{receipt.invoiceNumber}</div>
                         </div>
                         <div className="text-right">
-                            <div className="text-xs text-slate-400">Date</div>
+                            <div className="text-xs text-slate-400">{t("sales.table.date")}</div>
                             <div className="font-medium">{date}</div>
                         </div>
                     </div>
@@ -103,7 +105,7 @@ export default function ReceiptPreviewModal({ open, onClose, receipt, saleId }) 
                     {/* Customer */}
                     <div>
                         <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">
-                            Customer
+                            {t("sales.receipt.customer")}
                         </div>
                         <div className="font-medium">{receipt.customer?.name || "—"}</div>
                         {receipt.customer?.phone && (
@@ -119,19 +121,19 @@ export default function ReceiptPreviewModal({ open, onClose, receipt, saleId }) 
                     {/* Items */}
                     <div>
                         <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
-                            Items
+                            {t("sales.receipt.items")}
                         </div>
                         <table className="w-full text-xs">
                             <thead>
                                 <tr className="border-b border-slate-200 text-slate-400">
-                                    <th className="pb-1 text-left font-normal">Product</th>
-                                    <th className="pb-1 text-center font-normal">Qty</th>
-                                    <th className="pb-1 text-center font-normal">Weight</th>
-                                    <th className="pb-1 text-center font-normal">Base/g</th>
-                                    <th className="pb-1 text-center font-normal">Markup/g</th>
-                                    <th className="pb-1 text-center font-normal">Extra/g</th>
-                                    <th className="pb-1 text-center font-normal">Final/g</th>
-                                    <th className="pb-1 text-right font-normal">Total</th>
+                                    <th className="pb-1 text-left font-normal">{t("sales.receipt.product")}</th>
+                                    <th className="pb-1 text-center font-normal">{t("sales.receipt.qty")}</th>
+                                    <th className="pb-1 text-center font-normal">{t("sales.receipt.weight")}</th>
+                                    <th className="pb-1 text-center font-normal">{t("sales.receipt.basePerG")}</th>
+                                    <th className="pb-1 text-center font-normal">{t("sales.receipt.markupPerG")}</th>
+                                    <th className="pb-1 text-center font-normal">{t("sales.receipt.extraPerG")}</th>
+                                    <th className="pb-1 text-center font-normal">{t("sales.receipt.finalPerG")}</th>
+                                    <th className="pb-1 text-right font-normal">{t("sales.receipt.total")}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -158,33 +160,33 @@ export default function ReceiptPreviewModal({ open, onClose, receipt, saleId }) 
                     {/* Totals */}
                     <div className="space-y-1.5">
                         <div className="flex justify-between text-xs text-slate-500">
-                            <span>Total quantity</span>
+                            <span>{t("sales.receipt.totalQty")}</span>
                             <span>{Number(receipt.totalQuantity || 0)}</span>
                         </div>
                         <div className="flex justify-between text-xs text-slate-500">
-                            <span>Total weight</span>
+                            <span>{t("sales.receipt.totalWeight")}</span>
                             <span>{Number(receipt.totalWeight || 0).toFixed(2)} g</span>
                         </div>
                         <div className="flex justify-between text-xs text-slate-500">
-                            <span>Base value</span>
+                            <span>{t("sales.receipt.baseValue")}</span>
                             <span>₪{Number(receipt.totalBaseValue || 0).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-xs text-slate-500">
-                            <span>Markup value</span>
+                            <span>{t("sales.receipt.markupValue")}</span>
                             <span>₪{Number(receipt.totalMarkupValue || 0).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-xs text-slate-500">
-                            <span>Extra profit value</span>
+                            <span>{t("sales.receipt.extraProfitValue")}</span>
                             <span>₪{Number(receipt.totalProfitValue || 0).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-xs text-slate-500">
-                            <span>Subtotal</span>
+                            <span>{t("sales.receipt.subtotal")}</span>
                             <span>
                                 ₪{Number(receipt.subtotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                         </div>
                         <div className="flex justify-between border-t border-slate-200 pt-2">
-                            <span className="font-semibold">Total</span>
+                            <span className="font-semibold">{t("sales.receipt.total")}</span>
                             <span className="text-base font-bold text-amber-700">
                                 ₪{Number(receipt.finalTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
@@ -195,11 +197,11 @@ export default function ReceiptPreviewModal({ open, onClose, receipt, saleId }) 
 
                     {/* Payment */}
                     <div className="flex justify-between text-xs">
-                        <span className="text-slate-500">Payment method</span>
+                        <span className="text-slate-500">{t("sales.receipt.paymentMethod")}</span>
                         <span className="font-medium">{receipt.paymentMethod}</span>
                     </div>
                     <div className="flex justify-between text-xs">
-                        <span className="text-slate-500">Status</span>
+                        <span className="text-slate-500">{t("sales.receipt.paymentStatus")}</span>
                         <span className={
                             "font-medium " +
                             (receipt.paymentStatus === "Paid" ? "text-emerald-600" :
@@ -220,12 +222,12 @@ export default function ReceiptPreviewModal({ open, onClose, receipt, saleId }) 
                     {/* WhatsApp/SMS placeholder note */}
                     {!receipt.customer?.email && (
                         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 mt-2">
-                            WhatsApp/SMS delivery placeholder is ready for future integration. Add customer email to enable email receipts.
+                            {t("sales.receipt.whatsappPlaceholder")}
                         </div>
                     )}
 
                     <div className="pt-2 text-center text-xs text-slate-300">
-                        Thank you for your purchase.
+                        {t("sales.receipt.thankYou")}
                     </div>
                 </div>
 
@@ -235,7 +237,7 @@ export default function ReceiptPreviewModal({ open, onClose, receipt, saleId }) 
                         onClick={onClose}
                         className="w-full rounded-xl bg-amber-700 py-2 text-sm font-semibold text-white hover:bg-amber-800"
                     >
-                        Close
+                        {t("sales.receipt.close")}
                     </button>
                 </div>
             </div>

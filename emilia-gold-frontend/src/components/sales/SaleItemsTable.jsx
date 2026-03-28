@@ -1,5 +1,8 @@
+import { useTranslation } from "react-i18next";
+
 export default function SaleItemsTable({ items, products, onChange, currency, disabled }) {
     const { formatMoney } = currency;
+    const { t } = useTranslation();
 
     function toNumber(value, fallback = 0) {
         const parsed = Number(value);
@@ -82,15 +85,15 @@ export default function SaleItemsTable({ items, products, onChange, currency, di
                 <table className="w-full min-w-[1200px] border-collapse text-sm">
                     <thead className="bg-slate-50">
                         <tr>
-                            <th className={thCls + " w-[20%]"}>Inventory Group</th>
-                            <th className={thCls + " w-[10%]"}>Available</th>
-                            <th className={thCls + " w-[8%]"}>Qty Sold</th>
-                            <th className={thCls + " w-[10%]"}>Sold Weight</th>
-                            <th className={thCls + " w-[10%]"}>Base / g</th>
-                            <th className={thCls + " w-[10%]"}>Markup / g</th>
-                            <th className={thCls + " w-[10%]"}>Extra / g</th>
-                            <th className={thCls + " w-[10%]"}>Final / g</th>
-                            <th className={thCls + " w-[12%] text-right"}>Line Total</th>
+                            <th className={thCls + " w-[20%]"}>{t("sales.items.inventoryGroup")}</th>
+                            <th className={thCls + " w-[10%]"}>{t("sales.items.available")}</th>
+                            <th className={thCls + " w-[8%]"}>{t("sales.items.qtySold")}</th>
+                            <th className={thCls + " w-[10%]"}>{t("sales.items.soldWeight")}</th>
+                            <th className={thCls + " w-[10%]"}>{t("sales.items.basePerG")}</th>
+                            <th className={thCls + " w-[10%]"}>{t("sales.items.markupPerG")}</th>
+                            <th className={thCls + " w-[10%]"}>{t("sales.items.extraPerG")}</th>
+                            <th className={thCls + " w-[10%]"}>{t("sales.items.finalPerG")}</th>
+                            <th className={thCls + " w-[12%] text-right"}>{t("sales.items.lineTotal")}</th>
                             <th className={thCls + " w-[8%]"} />
                         </tr>
                     </thead>
@@ -102,9 +105,7 @@ export default function SaleItemsTable({ items, products, onChange, currency, di
                                     colSpan={10}
                                     className="py-8 text-center text-sm text-slate-400"
                                 >
-                                    No items yet. Click&nbsp;
-                                    <span className="font-medium text-amber-700">+ Add Item</span>
-                                    &nbsp;below.
+                                    {t("sales.items.noItems")}
                                 </td>
                             </tr>
                         )}
@@ -127,12 +128,12 @@ export default function SaleItemsTable({ items, products, onChange, currency, di
                                             disabled={disabled}
                                             className={inputCls + (row.productId === "" ? " text-slate-400" : "")}
                                         >
-                                            <option value="">Select product…</option>
+                                            <option value="">{t("sales.items.selectProduct")}</option>
                                             {products.map((p) => {
                                                 return (
                                                     <option key={p._id} value={p._id}>
                                                         {p.name}
-                                                        {p.quantity === 0 ? " - out of stock" : ""}
+                                                        {p.quantity === 0 ? ` - ${t("sales.items.outOfStock")}` : ""}
                                                     </option>
                                                 );
                                             })}
@@ -165,7 +166,7 @@ export default function SaleItemsTable({ items, products, onChange, currency, di
                                         />
                                         {qtyTooHigh && (
                                             <div className="mt-0.5 text-xs text-red-500">
-                                                Max {availableQty}
+                                                {t("sales.items.maxQty", { qty: availableQty })}
                                             </div>
                                         )}
                                     </td>
@@ -178,12 +179,12 @@ export default function SaleItemsTable({ items, products, onChange, currency, di
                                             value={row.soldWeight}
                                             onChange={(e) => updateRow(row._rowId, "soldWeight", e.target.value)}
                                             disabled={disabled}
-                                            placeholder="Exact g"
+                                            placeholder={t("sales.items.exactG")}
                                             className={inputCls + (weightTooHigh ? " border-red-400 ring-red-200" : "")}
                                         />
                                         {weightTooHigh && (
                                             <div className="mt-0.5 text-xs text-red-500">
-                                                Max {availableWeight.toFixed(2)} g
+                                                {t("sales.items.maxQty", { qty: availableWeight.toFixed(2) + " g" })}
                                             </div>
                                         )}
                                     </td>
@@ -196,7 +197,7 @@ export default function SaleItemsTable({ items, products, onChange, currency, di
                                             value={row.baseGoldPricePerGram}
                                             onChange={(e) => updateRow(row._rowId, "baseGoldPricePerGram", e.target.value)}
                                             disabled={disabled}
-                                            placeholder="Base"
+                                            placeholder={t("sales.items.base")}
                                             className={inputCls}
                                         />
                                     </td>
@@ -209,7 +210,7 @@ export default function SaleItemsTable({ items, products, onChange, currency, di
                                             value={row.markupPerGram}
                                             onChange={(e) => updateRow(row._rowId, "markupPerGram", e.target.value)}
                                             disabled={disabled}
-                                            placeholder="Markup"
+                                            placeholder={t("sales.items.markup")}
                                             className={inputCls}
                                         />
                                     </td>
@@ -221,7 +222,7 @@ export default function SaleItemsTable({ items, products, onChange, currency, di
                                             value={row.extraProfitPerGram}
                                             onChange={(e) => updateRow(row._rowId, "extraProfitPerGram", e.target.value)}
                                             disabled={disabled}
-                                            placeholder="Adjustment"
+                                            placeholder={t("sales.items.adjustment")}
                                             className={inputCls + (row.isBelowMinimum ? " border-amber-400" : "")}
                                         />
                                     </td>
@@ -231,7 +232,7 @@ export default function SaleItemsTable({ items, products, onChange, currency, di
                                             {formatMoney(row.finalPricePerGram)}
                                         </div>
                                         <div className="mt-1 text-[11px] text-slate-400">
-                                            Min {formatMoney(row.minimumPricePerGram)}
+                                            {t("sales.items.minPrice")} {formatMoney(row.minimumPricePerGram)}
                                         </div>
                                     </td>
 
@@ -249,7 +250,7 @@ export default function SaleItemsTable({ items, products, onChange, currency, di
                                         </div>
                                         {row.isBelowMinimum && (
                                             <div className="mt-1 text-[11px] font-medium text-amber-700">
-                                                Warning: below minimum by {formatMoney(row.minimumPricePerGram - row.finalPricePerGram)} / g
+                                                {t("sales.items.belowMinWarning", { amount: formatMoney(row.minimumPricePerGram - row.finalPricePerGram) })}
                                             </div>
                                         )}
                                     </td>
@@ -278,7 +279,7 @@ export default function SaleItemsTable({ items, products, onChange, currency, di
                 disabled={disabled}
                 className="flex items-center gap-1.5 rounded-lg border border-dashed border-amber-400 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50"
             >
-                <span className="text-lg leading-none">+</span> Add Item
+                <span className="text-lg leading-none">+</span> {t("sales.items.addItem")}
             </button>
         </div>
     );

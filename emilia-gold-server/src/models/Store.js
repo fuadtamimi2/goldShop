@@ -37,6 +37,41 @@ const storeSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    settings: {
+      currency: {
+        type: String,
+        default: "ILS",
+      },
+      defaultKarat: {
+        type: String,
+        default: "24K",
+      },
+      defaultMarkupPerGram: {
+        type: Number,
+        default: 0,
+      },
+      lowStockLimit: {
+        type: Number,
+        default: 2,
+      },
+      minimumProfitPerGram: {
+        type: Number,
+        default: 0,
+      },
+      businessName: {
+        type: String,
+        default: "",
+      },
+      receiptFooter: {
+        type: String,
+        default: "",
+      },
+      notes: {
+        type: String,
+        default: "",
+      },
+    },
   },
   { timestamps: true }
 );

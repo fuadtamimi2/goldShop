@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import PageHeader from "../ui/PageHeader";
 import Panel from "../ui/Panel";
 import Table from "../ui/Table";
@@ -33,6 +34,7 @@ const emptyDraft = {
 
 export default function GoldBuying() {
     const { formatMoney } = useCurrency();
+    const { t } = useTranslation();
 
     const [q, setQ] = useState("");
     const [items, setItems] = useState([]);
@@ -152,48 +154,48 @@ export default function GoldBuying() {
     }
 
     const columns = [
-        { key: "ref", header: "Ref" },
+        { key: "ref", header: t("goldBuying.table.ref") },
         {
             key: "date",
-            header: "Date",
+            header: t("goldBuying.table.date"),
             render: (r) => (r.date ? String(r.date).slice(0, 10) : "—"),
         },
         {
             key: "customer",
-            header: "Seller/Customer",
+            header: t("goldBuying.table.seller"),
             render: (r) => r.customerId?.name || "—",
         },
-        { key: "karat", header: "Karat", render: (r) => r.karat || "—" },
+        { key: "karat", header: t("goldBuying.table.karat"), render: (r) => r.karat || "—" },
         {
             key: "weight",
-            header: "Weight",
+            header: t("goldBuying.table.weight"),
             render: (r) => `${Number(r.weight || 0).toFixed(2)} g`,
         },
         {
             key: "external",
-            header: "Ref Buy / g",
+            header: t("goldBuying.table.refBuyPerG"),
             render: (r) => formatMoney(r.externalReferenceBuyPricePerGram || 0),
         },
         {
             key: "purchase",
-            header: "Our Buy / g",
+            header: t("goldBuying.table.ourBuyPerG"),
             render: (r) => formatMoney(r.purchasePricePerGram || 0),
         },
         {
             key: "total",
-            header: "Purchase Total",
+            header: t("goldBuying.table.purchaseTotal"),
             render: (r) => formatMoney(r.totalPurchaseAmount || 0),
         },
         {
             key: "margin",
-            header: "Expected Margin",
+            header: t("goldBuying.table.expectedMargin"),
             render: (r) => {
                 const margin = Number(r.expectedMargin || 0);
                 const cls = margin >= 0 ? "text-emerald-700" : "text-rose-700";
                 return <span className={cls}>{formatMoney(margin)}</span>;
             },
         },
-        { key: "paymentMethod", header: "Payment" },
+        { key: "paymentMethod", header: t("goldBuying.table.payment") },
     ];
 
     const inputCls =
@@ -202,14 +204,14 @@ export default function GoldBuying() {
     return (
         <div className="space-y-6">
             <PageHeader
-                title="Gold Buying"
-                subtitle="Track gold the store buys from customers as a separate transaction flow."
+                title={t("goldBuying.title")}
+                subtitle={t("goldBuying.subtitle")}
                 right={
                     <button
                         onClick={openAdd}
                         className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800"
                     >
-                        + New Gold Purchase
+                        {t("goldBuying.newPurchase")}
                     </button>
                 }
             />
@@ -219,7 +221,7 @@ export default function GoldBuying() {
                     <input
                         value={q}
                         onChange={(e) => setQ(e.target.value)}
-                        placeholder="Search by ref, customer or karat..."
+                        placeholder={t("goldBuying.searchPlaceholder")}
                         className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
                     />
                     <div className="text-sm text-slate-500">{rows.length} records</div>
@@ -228,11 +230,11 @@ export default function GoldBuying() {
                 <div className="mt-4">
                     {loading ? (
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-10 text-center text-sm text-slate-500">
-                            Loading transactions...
+                            {t("goldBuying.loading")}
                         </div>
                     ) : rows.length === 0 ? (
                         <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-500">
-                            No gold buying transactions yet.
+                            {t("goldBuying.empty")}
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
@@ -248,8 +250,8 @@ export default function GoldBuying() {
                     <div className="relative w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
                         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
                             <div>
-                                <div className="text-lg font-bold text-slate-900">New Gold Buying Transaction</div>
-                                <div className="text-xs text-slate-400">Separate from retail sales</div>
+                                <div className="text-lg font-bold text-slate-900">{t("goldBuying.modal.title")}</div>
+                                <div className="text-xs text-slate-400">{t("goldBuying.modal.subtitle")}</div>
                             </div>
                             <button
                                 onClick={() => setAddOpen(false)}
@@ -260,14 +262,14 @@ export default function GoldBuying() {
                         </div>
 
                         <div className="grid grid-cols-1 gap-4 p-6">
-                            <Field label="Seller / Customer" required>
+                            <Field label={t("goldBuying.modal.seller")} required>
                                 <select
                                     value={draft.customerId}
                                     onChange={(e) => setField("customerId", e.target.value)}
                                     disabled={saving || lookupsLoading}
                                     className={inputCls + (errors.customerId ? " border-red-400" : "")}
                                 >
-                                    <option value="">{lookupsLoading ? "Loading..." : "Select customer"}</option>
+                                    <option value="">{lookupsLoading ? t("common.loading") : t("common.selectPlaceholder")}</option>
                                     {customers.map((c) => (
                                         <option key={c._id} value={c._id}>
                                             {c.name}{c.phone ? ` · ${c.phone}` : ""}
@@ -278,7 +280,7 @@ export default function GoldBuying() {
                             </Field>
 
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                <Field label="Date">
+                                <Field label={t("goldBuying.modal.date")}>
                                     <input
                                         type="date"
                                         value={draft.date}
@@ -287,18 +289,19 @@ export default function GoldBuying() {
                                         className={inputCls}
                                     />
                                 </Field>
-                                <Field label="Karat / Purity">
+                                <Field label={t("goldBuying.modal.karat")}>
                                     <input
                                         value={draft.karat}
                                         onChange={(e) => setField("karat", e.target.value)}
                                         disabled={saving}
+                                        placeholder={t("goldBuying.modal.karatPlaceholder")}
                                         className={inputCls}
                                     />
                                 </Field>
                             </div>
 
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                                <Field label="Weight (g)" required>
+                                <Field label={t("goldBuying.modal.weight")} required>
                                     <input
                                         type="number"
                                         min="0"
@@ -310,7 +313,7 @@ export default function GoldBuying() {
                                     />
                                     {errors.weight && <p className="mt-1 text-xs text-red-600">{errors.weight}</p>}
                                 </Field>
-                                <Field label="External Ref Buy / g" required>
+                                <Field label={t("goldBuying.modal.externalRef")} required>
                                     <input
                                         type="number"
                                         min="0"
@@ -324,7 +327,7 @@ export default function GoldBuying() {
                                         <p className="mt-1 text-xs text-red-600">{errors.externalReferenceBuyPricePerGram}</p>
                                     )}
                                 </Field>
-                                <Field label="Our Purchase / g" required>
+                                <Field label={t("goldBuying.modal.ourPrice")} required>
                                     <input
                                         type="number"
                                         min="0"
@@ -341,17 +344,17 @@ export default function GoldBuying() {
                             </div>
 
                             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
-                                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Calculated Summary</div>
+                                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("goldBuying.modal.metrics")}</div>
                                 <div className="flex items-center justify-between text-slate-600">
-                                    <span>Estimated resale/reference value</span>
+                                    <span>{t("goldBuying.modal.resaleValue")}</span>
                                     <span className="font-semibold text-slate-800">{formatMoney(metrics.estimatedResaleValue)}</span>
                                 </div>
                                 <div className="mt-1 flex items-center justify-between text-slate-600">
-                                    <span>Total purchase amount</span>
+                                    <span>{t("goldBuying.modal.totalPurchase")}</span>
                                     <span className="font-semibold text-slate-800">{formatMoney(metrics.totalPurchaseAmount)}</span>
                                 </div>
                                 <div className="mt-1 flex items-center justify-between">
-                                    <span className="text-slate-600">Expected margin</span>
+                                    <span className="text-slate-600">{t("goldBuying.modal.expectedMargin")}</span>
                                     <span className={"font-semibold " + (metrics.expectedMargin >= 0 ? "text-emerald-700" : "text-rose-700")}>
                                         {formatMoney(metrics.expectedMargin)}
                                     </span>
@@ -359,7 +362,7 @@ export default function GoldBuying() {
                             </div>
 
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                <Field label="Payment method">
+                                <Field label={t("goldBuying.modal.payment")}>
                                     <select
                                         value={draft.paymentMethod}
                                         onChange={(e) => setField("paymentMethod", e.target.value)}
@@ -372,7 +375,7 @@ export default function GoldBuying() {
                                         <option>Other</option>
                                     </select>
                                 </Field>
-                                <Field label="Notes">
+                                <Field label={t("goldBuying.modal.notes")}>
                                     <input
                                         value={draft.notes}
                                         onChange={(e) => setField("notes", e.target.value)}
@@ -387,14 +390,14 @@ export default function GoldBuying() {
                                     onClick={() => setAddOpen(false)}
                                     className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
                                 >
-                                    Cancel
+                                    {t("common.cancel")}
                                 </button>
                                 <button
                                     onClick={onCreate}
                                     disabled={saving}
                                     className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-60"
                                 >
-                                    {saving ? "Saving..." : "Save"}
+                                    {saving ? t("goldBuying.modal.saving") : t("goldBuying.modal.save")}
                                 </button>
                             </div>
                         </div>
