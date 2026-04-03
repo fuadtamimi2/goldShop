@@ -43,13 +43,13 @@ const goldPurchaseSchema = new mongoose.Schema(
             min: 0.0001,
         },
 
-        externalReferenceBuyPricePerGram: {
+        marketPricePerGram: {
             type: Number,
             required: true,
             min: 0,
         },
 
-        purchasePricePerGram: {
+        boughtPricePerGram: {
             type: Number,
             required: true,
             min: 0,
@@ -67,9 +67,39 @@ const goldPurchaseSchema = new mongoose.Schema(
             min: 0,
         },
 
-        expectedMargin: {
+        expectedRevenue: {
             type: Number,
             required: true,
+        },
+
+        // Legacy fields kept for backward compatibility.
+        externalReferenceBuyPricePerGram: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+
+        purchasePricePerGram: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+
+        expectedMargin: {
+            type: Number,
+            default: 0,
+        },
+
+        // ── Daily pricing snapshot fields ──────────────────────────────────────
+        globalGoldPricePerOunceSnapshot: { type: Number, default: 0 },
+        buyOffsetPerOunceSnapshot: { type: Number, default: 0 },
+        usdIlsExchangeRateSnapshot: { type: Number, default: 0 },
+        buyBasePricePerGramSnapshot: { type: Number, default: 0 },
+        revenueSnapshot: { type: Number, default: 0 },
+        dailyPricingId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "DailyPricing",
+            default: null,
         },
 
         paymentMethod: {
@@ -87,11 +117,10 @@ const goldPurchaseSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
-goldPurchaseSchema.pre("validate", function (next) {
+goldPurchaseSchema.pre("validate", function () {
     if (!this.ref) {
         this.ref = `GB-${Date.now().toString().slice(-6)}`;
     }
-    next();
 });
 
 module.exports = mongoose.model("GoldPurchase", goldPurchaseSchema);

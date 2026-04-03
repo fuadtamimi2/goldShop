@@ -1,64 +1,46 @@
 /**
  * receipt.service.js
  *
- * Builds a structured receipt/invoice object from a saved Sale document.
- * This receipt object is returned with every POST /api/sales response and
- * can be retrieved later via GET /api/sales/:id/receipt.
+ * Builds structured receipt/invoice objects from saved Mongoose documents.
+ * Returns plain JSON so the frontend can render (modal preview, PDF, print, email).
  *
- * The object is intentionally plain JSON so the frontend can render it
- * however it needs (modal preview, PDF, print, email template, etc.).
+ * IMPORTANT: Both builders strip all internal margin/profit/cost data.
+ * Only customer-facing information is included.
  */
 
 /**
+ * Build a sales receipt/invoice for the customer.
+ * Shows: items sold, prices, totals, payment — NO internal cost/profit data.
+ *
  * @param {object} options
- * @param {import('../models/Sale')} options.sale     - Populated Mongoose Sale doc
- * @param {object|null}              options.customer - Populated customer subdoc
- * @param {object|null}              options.store    - Store doc (name, phone, email)
- * @returns {object}                                   Plain receipt object
+ * @param {object} options.sale     - Populated Mongoose Sale doc
+ * @param {object|null} options.customer
+ * @param {object|null} options.store
  */
 function buildReceipt({ sale, customer, store }) {
     const items = (sale.items || []).map((item) => ({
         productName: item.productName || item.description || "—",
         quantitySold: item.quantitySold ?? item.qty ?? 1,
         soldWeight: item.soldWeight ?? item.grams ?? 0,
-        baseGoldPricePerGram: item.baseGoldPricePerGram ?? 0,
-        markupPerGram: item.markupPerGram ?? 0,
-        extraProfitPerGram: item.extraProfitPerGram ?? 0,
-        finalPricePerGram: item.finalPricePerGram ?? item.pricePerGram ?? 0,
-        minimumPricePerGram: item.minimumPricePerGram ?? 0,
-        baseValue: item.baseValue ?? 0,
-        markupValue: item.markupValue ?? 0,
-        profitValue: item.profitValue ?? 0,
+        salePricePerGram: item.actualSalePricePerGram ?? item.finalPricePerGram ?? item.pricePerGram ?? 0,
         lineTotal: item.lineTotal ?? 0,
-        isBelowMinimum: item.isBelowMinimum ?? false,
     }));
 
     const totalQuantity = sale.totalQuantity ?? 0;
     const totalWeight = sale.totalWeight ?? 0;
     const subtotal = sale.subtotal ?? sale.finalTotal ?? sale.totalILS ?? 0;
-    const totalBaseValue = sale.totalBaseValue ?? 0;
-    const totalMarkupValue = sale.totalMarkupValue ?? 0;
-    const totalProfitValue = sale.totalProfitValue ?? 0;
-    const expectedMargin = sale.expectedMargin ?? totalProfitValue;
     const finalTotal = sale.finalTotal ?? sale.totalILS ?? 0;
 
     const customerData = customer
-        ? {
-            name: customer.name || "—",
-            phone: customer.phone || "—",
-            email: customer.email || null,
-        }
+        ? { name: customer.name || "—", phone: customer.phone || "—", email: customer.email || null }
         : { name: "—", phone: "—", email: null };
 
     const storeData = store
-        ? {
-            name: store.name || "Emilia Gold",
-            phone: store.phone || "",
-            email: store.email || "",
-        }
+        ? { name: store.name || "Emilia Gold", phone: store.phone || "", email: store.email || "" }
         : { name: "Emilia Gold", phone: "", email: "" };
 
     return {
+        type: "sale",
         invoiceNumber: sale.ref,
         date: sale.date ? new Date(sale.date).toISOString() : new Date().toISOString(),
         store: storeData,
@@ -67,10 +49,6 @@ function buildReceipt({ sale, customer, store }) {
         totalQuantity,
         totalWeight,
         subtotal,
-        totalBaseValue,
-        totalMarkupValue,
-        totalProfitValue,
-        expectedMargin,
         finalTotal,
         paymentMethod: sale.paymentMethod || "Cash",
         paymentStatus: sale.paymentStatus || sale.status || "Paid",
@@ -78,4 +56,42 @@ function buildReceipt({ sale, customer, store }) {
     };
 }
 
-module.exports = { buildReceipt };
+/**
+ * Build a gold-buying receipt for the seller/customer who sold gold to the shop.
+ * Shows: transaction details, karat, weight, price paid, total — NO internal revenue/margin data.
+ *
+ * @param {object} options
+ * @param {object} options.purchase - Populated Mongoose GoldPurchase doc
+ * @param {object|null} options.customer
+ * @param {object|null} options.store
+ */
+function buildGoldPurchaseReceipt({ purchase, customer, store }) {
+    const customerData = customer
+        ? { name: customer.name || "—", phone: customer.phone || "—", email: customer.email || null }
+        : { name: "—", phone: "—", email: null };
+
+    const storeData = store
+        ? { name: store.name || "Emilia Gold", phone: store.phone || "", email: store.email || "" }
+        : { name: "Emilia Gold", phone: "", email: "" };
+
+    return {
+        type: "goldPurchase",
+        receiptNumber: purchase.ref,
+        date: purchase.date ? new Date(purchase.date).toISOString() : new Date().toISOString(),
+        store: storeData,
+        customer: customerData,
+        karat: purchase.karat || "—",
+        weight: purchase.weight ?? 0,
+        // Market context — transparent to customer, no internal margin shown
+        globalGoldPricePerOunce: purchase.globalGoldPricePerOunceSnapshot ?? 0,
+        buyOffsetPerOunce: purchase.buyOffsetPerOunceSnapshot ?? 0,
+        usdIlsExchangeRate: purchase.usdIlsExchangeRateSnapshot ?? 0,
+        // What the customer received
+        boughtPricePerGram: purchase.boughtPricePerGram ?? purchase.purchasePricePerGram ?? 0,
+        totalPaid: purchase.totalPurchaseAmount ?? 0,
+        paymentMethod: purchase.paymentMethod || "Cash",
+        notes: purchase.notes || "",
+    };
+}
+
+module.exports = { buildReceipt, buildGoldPurchaseReceipt };

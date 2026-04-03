@@ -10,6 +10,8 @@ import {
     createGoldPurchase,
     listGoldPurchases,
 } from "../services/goldPurchases.service";
+import { useDailyPricing } from "../store/dailyPricing.store";
+import ReceiptPreviewModal from "../components/sales/ReceiptPreviewModal";
 
 function todayISODate() {
     const d = new Date();
@@ -26,15 +28,15 @@ const emptyDraft = {
     date: todayISODate(),
     karat: "",
     weight: "",
-    externalReferenceBuyPricePerGram: "",
-    purchasePricePerGram: "",
+    boughtPricePerGram: "",
     paymentMethod: "Cash",
     notes: "",
 };
 
 export default function GoldBuying() {
-    const { formatMoney } = useCurrency();
+    const { currency, formatMoney, convertCurrency } = useCurrency();
     const { t } = useTranslation();
+    const { buyBasePricePerGram, globalGoldPricePerOunce, buyOffsetPerOunce, usdIlsExchangeRate } = useDailyPricing();
 
     const [q, setQ] = useState("");
     const [items, setItems] = useState([]);
@@ -43,8 +45,11 @@ export default function GoldBuying() {
     const [lookupsLoading, setLookupsLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [addOpen, setAddOpen] = useState(false);
-    const [draft, setDraft] = useState(emptyDraft);
+    const [draft, setDraft] = useState({ ...emptyDraft });
     const [errors, setErrors] = useState({});
+    const [receipt, setReceipt] = useState(null);
+    const [receiptOpen, setReceiptOpen] = useState(false);
+    const [receiptPurchaseId, setReceiptPurchaseId] = useState(null);
 
     const loadItems = useCallback(async () => {
         try {
@@ -88,13 +93,13 @@ export default function GoldBuying() {
 
     const metrics = useMemo(() => {
         const weight = toNumber(draft.weight, 0);
-        const external = toNumber(draft.externalReferenceBuyPricePerGram, 0);
-        const purchase = toNumber(draft.purchasePricePerGram, 0);
-        const estimatedResaleValue = weight * external;
-        const totalPurchaseAmount = weight * purchase;
-        const expectedMargin = estimatedResaleValue - totalPurchaseAmount;
-        return { estimatedResaleValue, totalPurchaseAmount, expectedMargin };
-    }, [draft]);
+        const boughtPerGramUsd = toNumber(draft.boughtPricePerGram, 0);
+        const buyBase = buyBasePricePerGram(draft.karat);
+        const estimatedResaleValue = weight * buyBase;
+        const totalPurchaseAmount = weight * boughtPerGramUsd;
+        const expectedRevenue = estimatedResaleValue - totalPurchaseAmount;
+        return { buyBase, boughtPerGramUsd, estimatedResaleValue, totalPurchaseAmount, expectedRevenue };
+    }, [draft, buyBasePricePerGram]);
 
     function setField(field, value) {
         setDraft((prev) => ({ ...prev, [field]: value }));
@@ -102,22 +107,19 @@ export default function GoldBuying() {
     }
 
     function openAdd() {
-        setDraft(emptyDraft);
+        setDraft({ ...emptyDraft });
         setErrors({});
         setAddOpen(true);
     }
 
     function validate() {
-        const next = {};
-        if (!draft.customerId) next.customerId = "Seller/Customer is required.";
-        if (toNumber(draft.weight, 0) <= 0) next.weight = "Weight must be greater than 0.";
-        if (toNumber(draft.externalReferenceBuyPricePerGram, -1) < 0) {
-            next.externalReferenceBuyPricePerGram = "External reference price must be 0 or more.";
+        const validationErrors = {};
+        if (!draft.customerId) validationErrors.customerId = "Seller/Customer is required.";
+        if (toNumber(draft.weight, 0) <= 0) validationErrors.weight = "Weight must be greater than 0.";
+        if (toNumber(draft.boughtPricePerGram, -1) < 0) {
+            validationErrors.boughtPricePerGram = "Bought price must be 0 or more.";
         }
-        if (toNumber(draft.purchasePricePerGram, -1) < 0) {
-            next.purchasePricePerGram = "Our purchase price must be 0 or more.";
-        }
-        return next;
+        return validationErrors;
     }
 
     async function onCreate() {
@@ -129,22 +131,27 @@ export default function GoldBuying() {
 
         try {
             setSaving(true);
-            const newPurchase = await createGoldPurchase({
+            const { item: newPurchase, receipt: rec } = await createGoldPurchase({
                 customerId: draft.customerId,
                 date: draft.date,
                 karat: draft.karat,
                 weight: Number(draft.weight),
-                externalReferenceBuyPricePerGram: Number(draft.externalReferenceBuyPricePerGram || 0),
-                purchasePricePerGram: Number(draft.purchasePricePerGram || 0),
+                // Backend stores canonical USD values.
+                boughtPricePerGram: Number(draft.boughtPricePerGram || 0),
                 paymentMethod: draft.paymentMethod,
                 notes: draft.notes,
             });
 
-            // Prepend new item to list for immediate UI update
             setItems((prev) => [newPurchase, ...prev]);
+            await loadItems();
             setAddOpen(false);
-            setDraft(emptyDraft);
+            setDraft({ ...emptyDraft });
             setErrors({});
+            if (rec) {
+                setReceipt(rec);
+                setReceiptPurchaseId(newPurchase._id);
+                setReceiptOpen(true);
+            }
             emitToast({ type: "success", title: "Saved", message: "Gold purchase recorded." });
         } catch (err) {
             emitToast({ type: "error", title: "Failed", message: err.message });
@@ -172,27 +179,27 @@ export default function GoldBuying() {
             render: (r) => `${Number(r.weight || 0).toFixed(2)} g`,
         },
         {
-            key: "external",
-            header: t("goldBuying.table.refBuyPerG"),
-            render: (r) => formatMoney(r.externalReferenceBuyPricePerGram || 0),
+            key: "buyBase",
+            header: t("goldBuying.table.buyBasePerG"),
+            render: (r) => formatMoney(r.buyBasePricePerGramSnapshot || r.marketPricePerGram || 0, "USD"),
         },
         {
             key: "purchase",
-            header: t("goldBuying.table.ourBuyPerG"),
-            render: (r) => formatMoney(r.purchasePricePerGram || 0),
+            header: t("goldBuying.table.boughtPerG"),
+            render: (r) => formatMoney(r.boughtPricePerGram || 0, "USD"),
         },
         {
             key: "total",
             header: t("goldBuying.table.purchaseTotal"),
-            render: (r) => formatMoney(r.totalPurchaseAmount || 0),
+            render: (r) => formatMoney(r.totalPurchaseAmount || 0, "USD"),
         },
         {
             key: "margin",
-            header: t("goldBuying.table.expectedMargin"),
+            header: t("goldBuying.table.expectedRevenue"),
             render: (r) => {
-                const margin = Number(r.expectedMargin || 0);
-                const cls = margin >= 0 ? "text-emerald-700" : "text-rose-700";
-                return <span className={cls}>{formatMoney(margin)}</span>;
+                const revenue = Number(r.expectedRevenue || r.expectedMargin || 0);
+                const cls = revenue >= 0 ? "text-emerald-700" : "text-rose-700";
+                return <span className={cls}>{formatMoney(revenue, "USD")}</span>;
             },
         },
         { key: "paymentMethod", header: t("goldBuying.table.payment") },
@@ -200,6 +207,12 @@ export default function GoldBuying() {
 
     const inputCls =
         "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200";
+
+    const boughtPricePerGramDisplay = convertCurrency(
+        toNumber(draft.boughtPricePerGram, 0),
+        "USD",
+        currency
+    );
 
     return (
         <div className="space-y-6">
@@ -244,166 +257,205 @@ export default function GoldBuying() {
                 </div>
             </Panel>
 
+            {/* Add Gold Purchase Modal */}
             {addOpen && (
-                <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/40" onClick={() => setAddOpen(false)} />
-                    <div className="relative w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-                            <div>
-                                <div className="text-lg font-bold text-slate-900">{t("goldBuying.modal.title")}</div>
-                                <div className="text-xs text-slate-400">{t("goldBuying.modal.subtitle")}</div>
-                            </div>
-                            <button
-                                onClick={() => setAddOpen(false)}
-                                className="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-50 hover:text-slate-700"
-                            >
-                                ✕
-                            </button>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-4 p-6">
-                            <Field label={t("goldBuying.modal.seller")} required>
-                                <select
-                                    value={draft.customerId}
-                                    onChange={(e) => setField("customerId", e.target.value)}
-                                    disabled={saving || lookupsLoading}
-                                    className={inputCls + (errors.customerId ? " border-red-400" : "")}
-                                >
-                                    <option value="">{lookupsLoading ? t("common.loading") : t("common.selectPlaceholder")}</option>
-                                    {customers.map((c) => (
-                                        <option key={c._id} value={c._id}>
-                                            {c.name}{c.phone ? ` · ${c.phone}` : ""}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.customerId && <p className="mt-1 text-xs text-red-600">{errors.customerId}</p>}
-                            </Field>
-
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                <Field label={t("goldBuying.modal.date")}>
-                                    <input
-                                        type="date"
-                                        value={draft.date}
-                                        onChange={(e) => setField("date", e.target.value)}
-                                        disabled={saving}
-                                        className={inputCls}
-                                    />
-                                </Field>
-                                <Field label={t("goldBuying.modal.karat")}>
-                                    <input
-                                        value={draft.karat}
-                                        onChange={(e) => setField("karat", e.target.value)}
-                                        disabled={saving}
-                                        placeholder={t("goldBuying.modal.karatPlaceholder")}
-                                        className={inputCls}
-                                    />
-                                </Field>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                                <Field label={t("goldBuying.modal.weight")} required>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={draft.weight}
-                                        onChange={(e) => setField("weight", e.target.value)}
-                                        disabled={saving}
-                                        className={inputCls + (errors.weight ? " border-red-400" : "")}
-                                    />
-                                    {errors.weight && <p className="mt-1 text-xs text-red-600">{errors.weight}</p>}
-                                </Field>
-                                <Field label={t("goldBuying.modal.externalRef")} required>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={draft.externalReferenceBuyPricePerGram}
-                                        onChange={(e) => setField("externalReferenceBuyPricePerGram", e.target.value)}
-                                        disabled={saving}
-                                        className={inputCls + (errors.externalReferenceBuyPricePerGram ? " border-red-400" : "")}
-                                    />
-                                    {errors.externalReferenceBuyPricePerGram && (
-                                        <p className="mt-1 text-xs text-red-600">{errors.externalReferenceBuyPricePerGram}</p>
-                                    )}
-                                </Field>
-                                <Field label={t("goldBuying.modal.ourPrice")} required>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={draft.purchasePricePerGram}
-                                        onChange={(e) => setField("purchasePricePerGram", e.target.value)}
-                                        disabled={saving}
-                                        className={inputCls + (errors.purchasePricePerGram ? " border-red-400" : "")}
-                                    />
-                                    {errors.purchasePricePerGram && (
-                                        <p className="mt-1 text-xs text-red-600">{errors.purchasePricePerGram}</p>
-                                    )}
-                                </Field>
-                            </div>
-
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
-                                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("goldBuying.modal.metrics")}</div>
-                                <div className="flex items-center justify-between text-slate-600">
-                                    <span>{t("goldBuying.modal.resaleValue")}</span>
-                                    <span className="font-semibold text-slate-800">{formatMoney(metrics.estimatedResaleValue)}</span>
+                <>
+                    <div className="fixed inset-0 z-[999] bg-black/40" onClick={() => setAddOpen(false)} />
+                    <div className="fixed inset-0 z-[1000] overflow-y-auto p-4" onClick={() => setAddOpen(false)}>
+                        <div
+                            className="relative mx-auto my-8 w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                                <div>
+                                    <div className="text-lg font-bold text-slate-900">{t("goldBuying.modal.title")}</div>
+                                    <div className="text-xs text-slate-400">{t("goldBuying.modal.subtitle")}</div>
                                 </div>
-                                <div className="mt-1 flex items-center justify-between text-slate-600">
-                                    <span>{t("goldBuying.modal.totalPurchase")}</span>
-                                    <span className="font-semibold text-slate-800">{formatMoney(metrics.totalPurchaseAmount)}</span>
-                                </div>
-                                <div className="mt-1 flex items-center justify-between">
-                                    <span className="text-slate-600">{t("goldBuying.modal.expectedMargin")}</span>
-                                    <span className={"font-semibold " + (metrics.expectedMargin >= 0 ? "text-emerald-700" : "text-rose-700")}>
-                                        {formatMoney(metrics.expectedMargin)}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                <Field label={t("goldBuying.modal.payment")}>
-                                    <select
-                                        value={draft.paymentMethod}
-                                        onChange={(e) => setField("paymentMethod", e.target.value)}
-                                        disabled={saving}
-                                        className={inputCls}
-                                    >
-                                        <option>Cash</option>
-                                        <option>Card</option>
-                                        <option>Transfer</option>
-                                        <option>Other</option>
-                                    </select>
-                                </Field>
-                                <Field label={t("goldBuying.modal.notes")}>
-                                    <input
-                                        value={draft.notes}
-                                        onChange={(e) => setField("notes", e.target.value)}
-                                        disabled={saving}
-                                        className={inputCls}
-                                    />
-                                </Field>
-                            </div>
-
-                            <div className="mt-2 flex justify-end gap-2">
                                 <button
                                     onClick={() => setAddOpen(false)}
-                                    className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+                                    className="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-50 hover:text-slate-700"
                                 >
-                                    {t("common.cancel")}
+                                    ✕
                                 </button>
-                                <button
-                                    onClick={onCreate}
-                                    disabled={saving}
-                                    className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-60"
-                                >
-                                    {saving ? t("goldBuying.modal.saving") : t("goldBuying.modal.save")}
-                                </button>
+                            </div>
+
+                            <div className="space-y-4 p-6">
+                                {/* Daily pricing info */}
+                                {globalGoldPricePerOunce > 0 && (
+                                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 space-y-1">
+                                        <div className="font-semibold text-amber-800 mb-1">{t("goldBuying.modal.dailySnapshot")}</div>
+                                        <div className="flex justify-between">
+                                            <span>{t("goldBuying.modal.globalGoldPrice")}</span>
+                                            <span className="font-medium">${Number(globalGoldPricePerOunce).toFixed(2)} / oz</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span>{t("goldBuying.modal.buyOffset")}</span>
+                                            <span className="font-medium">${Number(buyOffsetPerOunce).toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span>{t("goldBuying.modal.exchangeRate")}</span>
+                                            <span className="font-medium">1 USD = {Number(usdIlsExchangeRate).toFixed(4)} ILS</span>
+                                        </div>
+                                        {draft.karat && (
+                                            <div className="flex justify-between border-t border-amber-200 pt-1">
+                                                <span>{t("goldBuying.modal.buyBasePerG")} ({draft.karat})</span>
+                                                <span className="font-semibold text-amber-800">{formatMoney(metrics.buyBase, "USD")}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                <Field label={t("goldBuying.modal.seller")} required>
+                                    <select
+                                        value={draft.customerId}
+                                        onChange={(e) => setField("customerId", e.target.value)}
+                                        disabled={saving || lookupsLoading}
+                                        className={inputCls + (errors.customerId ? " border-red-400" : "")}
+                                    >
+                                        <option value="">{lookupsLoading ? t("common.loading") : t("common.selectPlaceholder")}</option>
+                                        {customers.map((c) => (
+                                            <option key={c._id} value={c._id}>
+                                                {c.name}{c.phone ? ` · ${c.phone}` : ""}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.customerId && <p className="mt-1 text-xs text-red-600">{errors.customerId}</p>}
+                                </Field>
+
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <Field label={t("goldBuying.modal.date")}>
+                                        <input
+                                            type="date"
+                                            value={draft.date}
+                                            onChange={(e) => setField("date", e.target.value)}
+                                            disabled={saving}
+                                            className={inputCls}
+                                        />
+                                    </Field>
+                                    <Field label={t("goldBuying.modal.karat")}>
+                                        <select
+                                            value={draft.karat}
+                                            onChange={(e) => setField("karat", e.target.value)}
+                                            disabled={saving}
+                                            className={inputCls}
+                                        >
+                                            <option value="">{t("common.selectPlaceholder")}</option>
+                                            <option value="24K">24K</option>
+                                            <option value="22K">22K</option>
+                                            <option value="21K">21K</option>
+                                            <option value="18K">18K</option>
+                                        </select>
+                                    </Field>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <Field label={t("goldBuying.modal.weight")} required>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={draft.weight}
+                                            onChange={(e) => setField("weight", e.target.value)}
+                                            disabled={saving}
+                                            className={inputCls + (errors.weight ? " border-red-400" : "")}
+                                        />
+                                        {errors.weight && <p className="mt-1 text-xs text-red-600">{errors.weight}</p>}
+                                    </Field>
+                                    <Field label={t("goldBuying.modal.boughtPrice")} required>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={Number.isFinite(boughtPricePerGramDisplay) ? boughtPricePerGramDisplay : ""}
+                                            onChange={(e) => {
+                                                const enteredDisplay = toNumber(e.target.value, 0);
+                                                const enteredUsd = convertCurrency(enteredDisplay, currency, "USD");
+                                                setField("boughtPricePerGram", enteredUsd);
+                                            }}
+                                            disabled={saving}
+                                            className={inputCls + (errors.boughtPricePerGram ? " border-red-400" : "")}
+                                        />
+                                        {errors.boughtPricePerGram && (
+                                            <p className="mt-1 text-xs text-red-600">{errors.boughtPricePerGram}</p>
+                                        )}
+                                    </Field>
+                                </div>
+
+                                {/* Live metrics */}
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-1.5">
+                                    <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("goldBuying.modal.metrics")}</div>
+                                    <div className="flex items-center justify-between text-xs text-slate-600">
+                                        <span>{t("goldBuying.modal.buyBasePerG")}</span>
+                                        <span className="font-semibold text-slate-800">{formatMoney(metrics.buyBase, "USD")}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs text-slate-600">
+                                        <span>{t("goldBuying.modal.resaleValue")}</span>
+                                        <span className="font-semibold text-slate-800">{formatMoney(metrics.estimatedResaleValue, "USD")}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs text-slate-600">
+                                        <span>{t("goldBuying.modal.totalPurchase")}</span>
+                                        <span className="font-semibold text-slate-800">{formatMoney(metrics.totalPurchaseAmount, "USD")}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs border-t border-slate-200 pt-1.5">
+                                        <span className="text-slate-600">{t("goldBuying.modal.expectedRevenue")}</span>
+                                        <span className={"font-semibold " + (metrics.expectedRevenue >= 0 ? "text-emerald-700" : "text-rose-700")}>
+                                            {formatMoney(metrics.expectedRevenue, "USD")}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <Field label={t("goldBuying.modal.payment")}>
+                                        <select
+                                            value={draft.paymentMethod}
+                                            onChange={(e) => setField("paymentMethod", e.target.value)}
+                                            disabled={saving}
+                                            className={inputCls}
+                                        >
+                                            <option>Cash</option>
+                                            <option>Card</option>
+                                            <option>Transfer</option>
+                                            <option>Other</option>
+                                        </select>
+                                    </Field>
+                                    <Field label={t("goldBuying.modal.notes")}>
+                                        <input
+                                            value={draft.notes}
+                                            onChange={(e) => setField("notes", e.target.value)}
+                                            disabled={saving}
+                                            className={inputCls}
+                                        />
+                                    </Field>
+                                </div>
+
+                                <div className="flex justify-end gap-2 pt-2">
+                                    <button
+                                        onClick={() => setAddOpen(false)}
+                                        className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+                                    >
+                                        {t("common.cancel")}
+                                    </button>
+                                    <button
+                                        onClick={onCreate}
+                                        disabled={saving}
+                                        className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-60"
+                                    >
+                                        {saving ? t("goldBuying.modal.saving") : t("goldBuying.modal.save")}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                </>
             )}
+
+            {/* Gold Purchase Receipt */}
+            <ReceiptPreviewModal
+                open={receiptOpen}
+                onClose={() => setReceiptOpen(false)}
+                receipt={receipt}
+                purchaseId={receiptPurchaseId}
+            />
         </div>
     );
 }

@@ -4,6 +4,7 @@ const Sale = require("../models/Sale");
 const Product = require("../models/Product");
 const Customer = require("../models/Customer");
 const Store = require("../models/Store");
+const DailyPricing = require("../models/DailyPricing");
 const protect = require("../middleware/auth");
 const asyncHandler = require("../utils/asyncHandler");
 const { buildReceipt } = require("../services/receipt.service");
@@ -23,12 +24,56 @@ function normalizePaymentStatus(status) {
     return status || "Paid";
 }
 
-function normaliseItem(raw, product) {
+// Gold pricing constants (mirrors frontend data/pricing.js as fallback)
+const TROY_OUNCE_TO_GRAM = 31.1034768;
+const KARAT_RATIO = { "24K": 1.0, "22K": 22 / 24, "21K": 21 / 24, "18K": 18 / 24 };
+
+function computeKaratFactor(karat) {
+    const k = String(karat || "").trim().toUpperCase();
+    if (KARAT_RATIO[k] != null) return KARAT_RATIO[k];
+    const num = parseFloat(k);
+    if (Number.isFinite(num) && num > 0 && num <= 24) return num / 24;
+    return 1.0;
+}
+
+/**
+ * Compute sell base price per gram from a daily pricing snapshot.
+ * sellBasePricePerGram = (globalGoldPricePerOunce + sellOffsetPerOunce) / 31.1035 * karatFactor
+ */
+function computeSellBasePrice(pricingSnapshot, karatFactor) {
+    const global = Number(pricingSnapshot.globalGoldPricePerOunce || 0);
+    const sellOffset = Number(pricingSnapshot.sellOffsetPerOunce || 0);
+    return ((global + sellOffset) / TROY_OUNCE_TO_GRAM) * karatFactor;
+}
+
+function normaliseItem(raw, product, pricingSnapshot = {}) {
     const quantitySold = Number(raw.quantitySold ?? raw.qty ?? 0);
     const soldWeight = Number(raw.soldWeight ?? raw.weightInGrams ?? raw.grams ?? 0);
-    const baseGoldPricePerGram = Number(raw.baseGoldPricePerGram ?? raw.baseCostPerGram ?? 0);
-    const markupPerGram = Number(raw.markupPerGram ?? product.markupPerGram ?? 0);
-    const extraProfitPerGram = Number(raw.extraProfitPerGram ?? 0);
+
+    // Compute sell base price from daily pricing snapshot and product karat
+    const karatFactor = computeKaratFactor(product.karat);
+    const sellBasePricePerGram = roundNumber(computeSellBasePrice(pricingSnapshot, karatFactor));
+
+    // Product-specific factory extra cost per gram (fixed per product)
+    const productExtraPerGram = Number(
+        raw.productExtraPerGram ??
+        raw.productExtraProfitPerGram ??
+        product.extraProfitPerGram ??
+        product.markupPerGram ??
+        0
+    );
+
+    // Expected product price = sell base + product extra
+    const expectedProductPricePerGram = roundNumber(sellBasePricePerGram + productExtraPerGram);
+
+    // Actual sold price — entered by seller (required)
+    const actualSoldPricePerGram = Number(
+        raw.actualSoldPricePerGram ??
+        raw.actualSalePricePerGram ??
+        raw.salePricePerGram ??
+        raw.finalPricePerGram ??
+        expectedProductPricePerGram
+    );
 
     if (!raw.productId) {
         throw new Error("Each sale item must include a productId");
@@ -42,16 +87,8 @@ function normaliseItem(raw, product) {
         throw new Error("Each sale item must have soldWeight greater than 0");
     }
 
-    if (!Number.isFinite(baseGoldPricePerGram) || baseGoldPricePerGram < 0) {
-        throw new Error("Each sale item must have a valid baseGoldPricePerGram");
-    }
-
-    if (!Number.isFinite(markupPerGram) || markupPerGram < 0) {
-        throw new Error("Each sale item must have a valid markupPerGram");
-    }
-
-    if (!Number.isFinite(extraProfitPerGram)) {
-        throw new Error("Each sale item must have a valid extraProfitPerGram");
+    if (!Number.isFinite(actualSoldPricePerGram) || actualSoldPricePerGram < 0) {
+        throw new Error("Each sale item must have a valid actualSoldPricePerGram");
     }
 
     const productName = String(raw.productName || product.name || raw.description || "").trim();
@@ -59,17 +96,11 @@ function normaliseItem(raw, product) {
         throw new Error("Each sale item must include a productName snapshot");
     }
 
-    const minimumPricePerGram = roundNumber(baseGoldPricePerGram + markupPerGram);
-    const finalPricePerGram = roundNumber(minimumPricePerGram + extraProfitPerGram);
-
-    if (finalPricePerGram < 0) {
-        throw new Error(`Final price per gram for \"${productName}\" cannot be negative`);
-    }
-
-    const baseValue = roundNumber(soldWeight * baseGoldPricePerGram);
-    const markupValue = roundNumber(soldWeight * markupPerGram);
-    const profitValue = roundNumber(soldWeight * extraProfitPerGram);
+    const finalPricePerGram = roundNumber(actualSoldPricePerGram);
+    const profitPerGram = roundNumber(actualSoldPricePerGram - expectedProductPricePerGram);
+    const lineProfit = roundNumber(profitPerGram * soldWeight);
     const lineTotal = roundNumber(soldWeight * finalPricePerGram);
+    const isBelowExpected = finalPricePerGram < expectedProductPricePerGram;
 
     return {
         productId: product._id,
@@ -77,27 +108,58 @@ function normaliseItem(raw, product) {
         description: productName,
         quantitySold,
         soldWeight: roundNumber(soldWeight),
-        baseGoldPricePerGram: roundNumber(baseGoldPricePerGram),
-        markupPerGram: roundNumber(markupPerGram),
-        extraProfitPerGram: roundNumber(extraProfitPerGram),
-        minimumPricePerGram,
+
+        // ── New canonical snapshot fields ─────────────────────────────────────
+        globalGoldPricePerOunceSnapshot: roundNumber(pricingSnapshot.globalGoldPricePerOunce || 0),
+        sellOffsetPerOunceSnapshot: roundNumber(pricingSnapshot.sellOffsetPerOunce || 0),
+        usdIlsExchangeRateSnapshot: roundNumber(pricingSnapshot.usdIlsExchangeRate || 0),
+        sellBasePricePerGramSnapshot: sellBasePricePerGram,
+        productExtraPerGramSnapshot: roundNumber(productExtraPerGram),
+        expectedProductPricePerGramSnapshot: expectedProductPricePerGram,
+        profitPerGramSnapshot: profitPerGram,
+        lineProfitSnapshot: lineProfit,
+        actualSolePricePerGram: roundNumber(actualSoldPricePerGram), // typo-safe alias
+
+        // ── Legacy mirrors (backward compat with older records/clients) ────────
+        minimumPricePerGram: sellBasePricePerGram,
+        productExtraProfitPerGram: roundNumber(productExtraPerGram),
+        expectedMinimumSellingPricePerGram: expectedProductPricePerGram,
+        actualSalePricePerGram: roundNumber(actualSoldPricePerGram),
+        lineRevenue: lineProfit,
         finalPricePerGram,
-        baseValue,
-        markupValue,
-        profitValue,
+        baseGoldPricePerGram: sellBasePricePerGram,
+        markupPerGram: roundNumber(productExtraPerGram),
+        extraProfitPerGram: roundNumber(actualSoldPricePerGram - expectedProductPricePerGram),
+        baseValue: roundNumber(soldWeight * sellBasePricePerGram),
+        markupValue: roundNumber(soldWeight * productExtraPerGram),
+        profitValue: lineProfit,
         lineTotal,
-        isBelowMinimum: finalPricePerGram < minimumPricePerGram,
+        isBelowMinimum: isBelowExpected,
     };
 }
 
 function computeTotals(items) {
+    const subtotal = roundNumber(items.reduce((sum, item) => sum + item.lineTotal, 0));
+
     return {
         totalQuantity: items.reduce((sum, item) => sum + item.quantitySold, 0),
         totalWeight: roundNumber(items.reduce((sum, item) => sum + item.soldWeight, 0)),
-        totalBaseValue: roundNumber(items.reduce((sum, item) => sum + item.baseValue, 0)),
-        totalMarkupValue: roundNumber(items.reduce((sum, item) => sum + item.markupValue, 0)),
-        totalProfitValue: roundNumber(items.reduce((sum, item) => sum + item.profitValue, 0)),
-        subtotal: roundNumber(items.reduce((sum, item) => sum + item.lineTotal, 0)),
+        totalBaseValue: roundNumber(items.reduce((sum, item) => sum + (item.baseValue || 0), 0)),
+        totalMarkupValue: roundNumber(items.reduce((sum, item) => sum + (item.markupValue || 0), 0)),
+        totalProfitValue: roundNumber(items.reduce((sum, item) => sum + (item.profitValue || 0), 0)),
+        totalLineRevenue: roundNumber(items.reduce((sum, item) => sum + (item.lineRevenue || 0), 0)),
+        expectedMinimumTotal: roundNumber(
+            items.reduce(
+                (sum, item) =>
+                    sum +
+                    roundNumber(
+                        (item.expectedProductPricePerGramSnapshot || item.expectedMinimumSellingPricePerGram || 0) *
+                        item.soldWeight
+                    ),
+                0
+            )
+        ),
+        subtotal,
     };
 }
 
@@ -114,6 +176,25 @@ async function createSaleRecord({ req, payload, session = null }) {
     } = payload;
 
     const rawItems = payload.items || [];
+
+    // ── 0. Load today's daily pricing snapshot ────────────────────────────────
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+    const dailyPricing = await DailyPricing.findOne({
+        storeId: req.user.storeId,
+        pricingDate: todayStr,
+    }).sort({ createdAt: -1 });
+
+    // pricingSnapshot — falls back to zeros if daily pricing not yet set (graceful)
+    const pricingSnapshot = dailyPricing
+        ? {
+            globalGoldPricePerOunce: dailyPricing.globalGoldPricePerOunce,
+            buyOffsetPerOunce: dailyPricing.buyOffsetPerOunce,
+            sellOffsetPerOunce: dailyPricing.sellOffsetPerOunce,
+            usdIlsExchangeRate: dailyPricing.usdIlsExchangeRate,
+        }
+        : { globalGoldPricePerOunce: 0, buyOffsetPerOunce: 0, sellOffsetPerOunce: 0, usdIlsExchangeRate: 0 };
 
     // ── 1. Validate customer ──────────────────────────────────────────────────
     if (!customerId) {
@@ -149,7 +230,7 @@ async function createSaleRecord({ req, payload, session = null }) {
         if (!product) {
             throw new Error("Product not found in inventory");
         }
-        return normaliseItem(raw, product);
+        return normaliseItem(raw, product, pricingSnapshot);
     });
 
     const requestedByProduct = new Map();
@@ -206,11 +287,16 @@ async function createSaleRecord({ req, payload, session = null }) {
         date: date ? new Date(date) : undefined,
         items,
         ...totals,
-        expectedMargin: totals.totalProfitValue,
+        expectedMargin: totals.totalLineRevenue,
         finalTotal,
         paymentMethod,
         paymentStatus: normalizePaymentStatus(paymentStatus),
         notes,
+        // Sale-level pricing snapshot
+        globalGoldPricePerOunceSnapshot: pricingSnapshot.globalGoldPricePerOunce || 0,
+        sellOffsetPerOunceSnapshot: pricingSnapshot.sellOffsetPerOunce || 0,
+        usdIlsExchangeRateSnapshot: pricingSnapshot.usdIlsExchangeRate || 0,
+        dailyPricingId: dailyPricing?._id || null,
     };
 
     if (session) {

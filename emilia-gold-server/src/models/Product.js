@@ -53,12 +53,20 @@ const productSchema = new mongoose.Schema(
             min: 0,
         },
 
+        extraProfitPerGram: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+
+        // Legacy field kept for backward compatibility with older records.
         markupPerGram: {
             type: Number,
             default: 0,
             min: 0,
         },
 
+        // Legacy field kept for backward compatibility, not used in new pricing logic.
         baseCostPerGram: {
             type: Number,
             alias: "costPrice",

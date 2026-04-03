@@ -6,20 +6,40 @@ function normalizeNumber(value, fallback = 0) {
 }
 
 function normalizeSaleItem(item = {}) {
+    const minimumPricePerGram = normalizeNumber(item.minimumPricePerGram ?? item.baseGoldPricePerGram, 0);
+    const productExtraProfitPerGram = normalizeNumber(
+        item.productExtraProfitPerGram ?? item.markupPerGram,
+        0
+    );
+    const expectedMinimumSellingPricePerGram = normalizeNumber(
+        item.expectedMinimumSellingPricePerGram ?? (minimumPricePerGram + productExtraProfitPerGram),
+        0
+    );
+    const actualSalePricePerGram = normalizeNumber(
+        item.actualSalePricePerGram ?? item.salePricePerGram ?? item.finalPricePerGram ?? item.pricePerGram,
+        0
+    );
+
     return {
         ...item,
         quantitySold: normalizeNumber(item.quantitySold ?? item.qty, 0),
         soldWeight: normalizeNumber(item.soldWeight ?? item.grams ?? item.weightInGrams, 0),
-        baseGoldPricePerGram: normalizeNumber(item.baseGoldPricePerGram, 0),
-        markupPerGram: normalizeNumber(item.markupPerGram, 0),
-        extraProfitPerGram: normalizeNumber(item.extraProfitPerGram, 0),
-        finalPricePerGram: normalizeNumber(item.finalPricePerGram ?? item.pricePerGram, 0),
-        minimumPricePerGram: normalizeNumber(item.minimumPricePerGram, 0),
-        baseValue: normalizeNumber(item.baseValue, 0),
-        markupValue: normalizeNumber(item.markupValue, 0),
-        profitValue: normalizeNumber(item.profitValue, 0),
+        minimumPricePerGram,
+        productExtraProfitPerGram,
+        expectedMinimumSellingPricePerGram,
+        actualSalePricePerGram,
+        lineRevenue: normalizeNumber(
+            item.lineRevenue,
+            (actualSalePricePerGram - minimumPricePerGram) * normalizeNumber(item.soldWeight ?? item.grams ?? item.weightInGrams, 0)
+        ),
+        finalPricePerGram: actualSalePricePerGram,
+        baseValue: normalizeNumber(item.baseValue, minimumPricePerGram * normalizeNumber(item.soldWeight ?? item.grams ?? item.weightInGrams, 0)),
+        markupValue: normalizeNumber(item.markupValue, productExtraProfitPerGram * normalizeNumber(item.soldWeight ?? item.grams ?? item.weightInGrams, 0)),
+        profitValue: normalizeNumber(item.profitValue, (actualSalePricePerGram - minimumPricePerGram) * normalizeNumber(item.soldWeight ?? item.grams ?? item.weightInGrams, 0)),
         lineTotal: normalizeNumber(item.lineTotal, 0),
-        isBelowMinimum: Boolean(item.isBelowMinimum),
+        isBelowMinimum: Boolean(
+            item.isBelowMinimum ?? (actualSalePricePerGram < expectedMinimumSellingPricePerGram)
+        ),
     };
 }
 
@@ -32,6 +52,8 @@ function normalizeSale(item = {}) {
         totalBaseValue: normalizeNumber(item.totalBaseValue, 0),
         totalMarkupValue: normalizeNumber(item.totalMarkupValue, 0),
         totalProfitValue: normalizeNumber(item.totalProfitValue, 0),
+        totalLineRevenue: normalizeNumber(item.totalLineRevenue, 0),
+        expectedMinimumTotal: normalizeNumber(item.expectedMinimumTotal, 0),
         subtotal: normalizeNumber(item.subtotal, 0),
         finalTotal: normalizeNumber(item.finalTotal ?? item.totalILS, 0),
         paymentStatus: item.paymentStatus || item.status || "Paid",
@@ -44,10 +66,6 @@ function normalizeReceipt(receipt = {}) {
         items: (receipt.items || []).map(normalizeSaleItem),
         totalQuantity: normalizeNumber(receipt.totalQuantity, 0),
         totalWeight: normalizeNumber(receipt.totalWeight, 0),
-        totalBaseValue: normalizeNumber(receipt.totalBaseValue, 0),
-        totalMarkupValue: normalizeNumber(receipt.totalMarkupValue, 0),
-        totalProfitValue: normalizeNumber(receipt.totalProfitValue, 0),
-        expectedMargin: normalizeNumber(receipt.expectedMargin, 0),
         subtotal: normalizeNumber(receipt.subtotal, 0),
         finalTotal: normalizeNumber(receipt.finalTotal ?? receipt.totalAmount, 0),
         paymentStatus: receipt.paymentStatus || "Paid",

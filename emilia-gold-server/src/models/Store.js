@@ -47,10 +47,6 @@ const storeSchema = new mongoose.Schema(
         type: String,
         default: "24K",
       },
-      defaultMarkupPerGram: {
-        type: Number,
-        default: 0,
-      },
       lowStockLimit: {
         type: Number,
         default: 2,
@@ -58,6 +54,18 @@ const storeSchema = new mongoose.Schema(
       minimumProfitPerGram: {
         type: Number,
         default: 0,
+      },
+      defaultBuyOffsetPerOunce: {
+        type: Number,
+        default: 0,
+      },
+      defaultSellOffsetPerOunce: {
+        type: Number,
+        default: 0,
+      },
+      defaultUsdIlsExchangeRate: {
+        type: Number,
+        default: 3.69,
       },
       businessName: {
         type: String,

@@ -6,9 +6,11 @@ const SettingsCtx = createContext(null);
 const defaultSettings = {
     currency: "ILS",
     defaultKarat: "24K",
-    defaultMarkupPerGram: 0,
     lowStockLimit: 2,
     minimumProfitPerGram: 0,
+    defaultBuyOffsetPerOunce: 0,
+    defaultSellOffsetPerOunce: 0,
+    defaultUsdIlsExchangeRate: 3.69,
     businessName: "",
     receiptFooter: "",
     notes: "",

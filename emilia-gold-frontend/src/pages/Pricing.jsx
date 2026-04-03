@@ -12,15 +12,11 @@ import {
 } from "../data/pricing";
 import { fetchSpotUsdPerOz } from "../services/pricing.service";
 import { useCurrency } from "../store/currency.store";
-
-function fmtMoney(code, n) {
-  // Simple currency formatting (later can use Intl.NumberFormat)
-  const symbol = code === "USD" ? "$" : code === "ILS" ? "₪" : "JD";
-  return `${symbol} ${n.toFixed(2)}`;
-}
+import { useDailyPricing } from "../store/dailyPricing.store";
 
 export default function Pricing() {
-  const { currency, setCurrency } = useCurrency();
+  const { currency, setCurrency, formatMoney } = useCurrency();
+  const { setShowModal } = useDailyPricing();
   const { t } = useTranslation();
   const [spotUsdPerOz, setSpotUsdPerOz] = useState(SPOT_USD_PER_OZ);
   const [updatedAt, setUpdatedAt] = useState(null);
@@ -86,15 +82,24 @@ export default function Pricing() {
         title={t("pricing.title")}
         subtitle={t("pricing.subtitle")}
         right={
-          <select
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-          >
-            <option value="USD">USD</option>
-            <option value="ILS">ILS</option>
-            <option value="JOD">JOD</option>
-          </select>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowModal(true)}
+              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100"
+            >
+              {t("dailyPricing.updateTodayBtn")}
+            </button>
+            <select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+            >
+              <option value="USD">USD</option>
+              <option value="ILS">ILS</option>
+              <option value="JOD">JOD</option>
+            </select>
+          </div>
         }
       />
 
@@ -102,10 +107,10 @@ export default function Pricing() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Panel title={t("pricing.spotPrice")} meta={t("pricing.perTroyOunce")}>
           <div className="text-3xl font-semibold text-slate-900">
-            {fmtMoney(currency, spotPerOz)}
+            {formatMoney(spotPerOz, currency)}
           </div>
           <div className="mt-2 text-sm text-slate-500">
-            {t("pricing.base")} {fmtMoney("USD", spotUsdPerOz)} {t("pricing.perOz")}
+            {t("pricing.base")} {formatMoney(spotUsdPerOz, "USD")} {t("pricing.perOz")}
           </div>
           <div className="mt-1 text-xs text-slate-400">
             {loadingSpot
@@ -118,7 +123,7 @@ export default function Pricing() {
 
         <Panel title={t("pricing.price24k")} meta={t("pricing.perGram")}>
           <div className="text-3xl font-semibold text-slate-900">
-            {fmtMoney(currency, price24kPerGram)}
+            {formatMoney(price24kPerGram, currency)}
           </div>
           <div className="mt-2 text-sm text-slate-500">
             (Spot / 31.103g)
@@ -149,7 +154,7 @@ export default function Pricing() {
             >
               <div className="text-sm text-slate-500">{c.k}</div>
               <div className="mt-2 text-2xl font-semibold text-slate-900">
-                {fmtMoney(currency, c.perGram)}
+                {formatMoney(c.perGram, currency)}
               </div>
               <div className="mt-1 text-xs text-slate-400">
                 {t("pricing.ratio")} {KARAT_RATIO[c.k].toFixed(4)}
@@ -175,7 +180,7 @@ export default function Pricing() {
                 <tr key={h.date} className="hover:bg-slate-50">
                   <td className="px-4 py-3 text-slate-900">{h.date}</td>
                   <td className="px-4 py-3 text-slate-900">
-                    {fmtMoney(currency, h.value)}
+                    {formatMoney(h.value, currency)}
                   </td>
                 </tr>
               ))}

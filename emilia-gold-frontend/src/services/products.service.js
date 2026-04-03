@@ -6,6 +6,11 @@ function normalizeNumber(value, fallback = 0) {
 }
 
 function normalizePayload(payload) {
+    const extraProfitPerGram = normalizeNumber(
+        payload?.extraProfitPerGram ?? payload?.productProfitPerGram ?? payload?.markupPerGram,
+        0
+    );
+
     return {
         name: String(payload?.name || "").trim(),
         sku: String(payload?.sku || "").trim(),
@@ -14,8 +19,8 @@ function normalizePayload(payload) {
         karat: String(payload?.karat || "").trim(),
         quantity: normalizeNumber(payload?.quantity ?? payload?.qty, 0),
         totalWeight: normalizeNumber(payload?.totalWeight ?? payload?.grams, 0),
-        markupPerGram: normalizeNumber(payload?.markupPerGram, 0),
-        baseCostPerGram: normalizeNumber(payload?.baseCostPerGram ?? payload?.costPrice, 0),
+        extraProfitPerGram,
+        markupPerGram: extraProfitPerGram,
         notes: String(payload?.notes || "").trim(),
         isActive: payload?.isActive !== false,
     };
@@ -24,18 +29,20 @@ function normalizePayload(payload) {
 function normalizeProduct(item = {}) {
     const quantity = normalizeNumber(item.quantity ?? item.qty, 0);
     const totalWeight = normalizeNumber(item.totalWeight ?? item.grams, 0);
-    const baseCostPerGram = normalizeNumber(item.baseCostPerGram ?? item.costPrice, 0);
-    const markupPerGram = normalizeNumber(item.markupPerGram, 0);
+    const extraProfitPerGram = normalizeNumber(
+        item.extraProfitPerGram ?? item.productProfitPerGram ?? item.markupPerGram,
+        0
+    );
 
     return {
         ...item,
         quantity,
         totalWeight,
-        markupPerGram,
-        baseCostPerGram,
+        extraProfitPerGram,
+        productProfitPerGram: extraProfitPerGram,
+        markupPerGram: extraProfitPerGram,
         qty: quantity,
         grams: totalWeight,
-        costPrice: baseCostPerGram,
         productType: item.productType || "",
         karat: item.karat || "",
         averageWeightPerPiece: quantity > 0 ? totalWeight / quantity : 0,

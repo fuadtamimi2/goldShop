@@ -6,11 +6,12 @@ export default function SaleTotalsCard({ items, currency }) {
 
     const totalQuantity = items.reduce((sum, item) => sum + (Number(item.quantitySold) || 0), 0);
     const totalWeight = items.reduce((sum, item) => sum + (Number(item.soldWeight) || 0), 0);
-    const totalBaseValue = items.reduce((sum, item) => sum + (Number(item.baseValue) || 0), 0);
-    const totalMarkupValue = items.reduce((sum, item) => sum + (Number(item.markupValue) || 0), 0);
-    const totalProfitValue = items.reduce((sum, item) => sum + (Number(item.profitValue) || 0), 0);
+    const expectedMinimumTotal = items.reduce(
+        (sum, item) => sum + ((Number(item.expectedProductPricePerGram ?? item.expectedMinimumSellingPricePerGram) || 0) * (Number(item.soldWeight) || 0)),
+        0
+    );
     const finalTotal = items.reduce((sum, item) => sum + (Number(item.lineTotal) || 0), 0);
-    const hasBelowMinimum = items.some((item) => item.isBelowMinimum);
+    const hasBelowExpected = items.some((item) => item.isBelowExpected ?? item.isBelowMinimum);
 
     const row = "flex items-center justify-between text-sm";
     const label = "text-slate-500";
@@ -33,28 +34,18 @@ export default function SaleTotalsCard({ items, currency }) {
             </div>
 
             <div className={row}>
-                <span className={label}>{t("sales.totals.baseValue")}</span>
-                <span className={value}>{formatMoney(totalBaseValue)}</span>
-            </div>
-
-            <div className={row}>
-                <span className={label}>{t("sales.totals.markupValue")}</span>
-                <span className={value}>{formatMoney(totalMarkupValue)}</span>
-            </div>
-
-            <div className={row}>
-                <span className={label}>{t("sales.totals.extraProfitValue")}</span>
-                <span className={value}>{formatMoney(totalProfitValue)}</span>
+                <span className={label}>{t("sales.totals.expectedMinimumTotal")}</span>
+                <span className={value}>{formatMoney(expectedMinimumTotal, "USD")}</span>
             </div>
 
             <div className="border-t border-slate-200 pt-2">
                 <div className="flex items-center justify-between">
                     <span className="font-semibold text-slate-800">{t("sales.totals.total")}</span>
-                    <span className="text-lg font-bold text-amber-700">{formatMoney(finalTotal)}</span>
+                    <span className="text-lg font-bold text-amber-700">{formatMoney(finalTotal, "USD")}</span>
                 </div>
             </div>
 
-            {hasBelowMinimum && (
+            {hasBelowExpected && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                     {t("sales.totals.belowMinWarning")}
                 </div>

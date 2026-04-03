@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState } from "react";
-import { USD_TO_ILS, USD_TO_JOD } from "../data/pricing";
+import { convertViaUsd, formatCurrency, normalizeCurrency } from "../utils/currency";
 
 const SETTINGS_KEY = "eg_settings";
 const CurrencyCtx = createContext(null);
@@ -9,32 +9,12 @@ function readInitialCurrency() {
         const raw = localStorage.getItem(SETTINGS_KEY);
         const parsed = raw ? JSON.parse(raw) : null;
         const c = parsed?.shop?.currency;
-        if (c === "USD" || c === "ILS" || c === "JOD") return c;
+        return normalizeCurrency(c, "ILS");
     } catch {
         // ignore and fallback
     }
 
     return "ILS";
-}
-
-function toUsd(amount, from) {
-    if (from === "USD") return amount;
-    if (from === "ILS") return amount / USD_TO_ILS;
-    if (from === "JOD") return amount / USD_TO_JOD;
-    return amount;
-}
-
-function fromUsd(amount, to) {
-    if (to === "USD") return amount;
-    if (to === "ILS") return amount * USD_TO_ILS;
-    if (to === "JOD") return amount * USD_TO_JOD;
-    return amount;
-}
-
-function symbolFor(currency) {
-    if (currency === "USD") return "$";
-    if (currency === "JOD") return "JD";
-    return "₪";
 }
 
 function persistCurrency(currency) {
@@ -56,9 +36,11 @@ function persistCurrency(currency) {
 
 export function CurrencyProvider({ children }) {
     const [currency, setCurrencyState] = useState(readInitialCurrency);
+    // Optional live exchange rate from daily pricing (overrides static rate)
+    const [liveUsdIlsRate, setLiveUsdIlsRate] = useState(null);
 
     const setCurrency = (next) => {
-        const resolved = next === "USD" || next === "ILS" || next === "JOD" ? next : "ILS";
+        const resolved = normalizeCurrency(next, "ILS");
         setCurrencyState(resolved);
         persistCurrency(resolved);
     };
@@ -67,20 +49,21 @@ export function CurrencyProvider({ children }) {
         () => ({
             currency,
             setCurrency,
+            // Expose rate setter so DailyPricingProvider can inject today's rate
+            setLiveUsdIlsRate,
             convertCurrency: (amount, from = "ILS", to = currency) => {
-                const value = Number(amount);
-                if (!Number.isFinite(value)) return 0;
-                return fromUsd(toUsd(value, from), to);
+                return convertViaUsd(
+                    amount,
+                    normalizeCurrency(from, "ILS"),
+                    normalizeCurrency(to, currency),
+                    liveUsdIlsRate
+                );
             },
             formatMoney: (amount, from = "ILS") => {
-                const converted = fromUsd(toUsd(Number(amount) || 0, from), currency);
-                return `${symbolFor(currency)} ${converted.toLocaleString(undefined, {
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 2,
-                })}`;
+                return formatCurrency(amount, currency, normalizeCurrency(from, "ILS"), liveUsdIlsRate);
             },
         }),
-        [currency]
+        [currency, liveUsdIlsRate]
     );
 
     return <CurrencyCtx.Provider value={api}>{children}</CurrencyCtx.Provider>;

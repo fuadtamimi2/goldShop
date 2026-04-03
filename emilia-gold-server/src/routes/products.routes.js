@@ -9,6 +9,11 @@ function toNumber(value, fallback = 0) {
 }
 
 function normalizePayload(payload = {}) {
+    const extraProfitPerGram = toNumber(
+        payload.extraProfitPerGram ?? payload.productProfitPerGram ?? payload.markupPerGram,
+        0
+    );
+
     return {
         name: String(payload.name || "").trim(),
         sku: String(payload.sku || "").trim(),
@@ -17,17 +22,19 @@ function normalizePayload(payload = {}) {
         karat: String(payload.karat || "").trim(),
         quantity: toNumber(payload.quantity ?? payload.qty, 0),
         totalWeight: toNumber(payload.totalWeight ?? payload.grams, 0),
-        markupPerGram: toNumber(payload.markupPerGram, 0),
+        extraProfitPerGram,
+        // Keep writing legacy field for existing clients and old records.
+        markupPerGram: extraProfitPerGram,
         baseCostPerGram: toNumber(payload.baseCostPerGram ?? payload.costPrice, 0),
         notes: String(payload.notes || "").trim(),
         isActive: payload.isActive !== false,
     };
 }
 
-function validateNumbers({ quantity, totalWeight, markupPerGram, baseCostPerGram }) {
+function validateNumbers({ quantity, totalWeight, extraProfitPerGram, baseCostPerGram }) {
     if (!Number.isInteger(quantity) || quantity < 0) return "quantity must be a whole number that is 0 or more";
     if (totalWeight < 0) return "totalWeight must be 0 or more";
-    if (markupPerGram < 0) return "markupPerGram must be 0 or more";
+    if (extraProfitPerGram < 0) return "extraProfitPerGram must be 0 or more";
     if (baseCostPerGram < 0) return "baseCostPerGram must be 0 or more";
     if (quantity === 0 && totalWeight > 0) return "totalWeight must be 0 when quantity is 0";
     if (quantity > 0 && totalWeight <= 0) return "totalWeight must be greater than 0 when quantity is above 0";

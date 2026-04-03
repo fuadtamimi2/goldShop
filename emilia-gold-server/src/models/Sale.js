@@ -36,15 +36,45 @@ const saleItemSchema = new mongoose.Schema(
             min: 0.0001,
         },
 
-        baseGoldPricePerGram: {
+        minimumPricePerGram: {
             type: Number,
             required: true,
             min: 0,
         },
 
-        markupPerGram: {
+        productExtraProfitPerGram: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+
+        expectedMinimumSellingPricePerGram: {
             type: Number,
             required: true,
+            min: 0,
+        },
+
+        actualSalePricePerGram: {
+            type: Number,
+            required: true,
+            min: 0,
+        },
+
+        lineRevenue: {
+            type: Number,
+            required: true,
+        },
+
+        // Legacy fields kept for old records and payload compatibility.
+        baseGoldPricePerGram: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+
+        markupPerGram: {
+            type: Number,
+            default: 0,
             min: 0,
         },
 
@@ -53,34 +83,28 @@ const saleItemSchema = new mongoose.Schema(
             default: 0,
         },
 
-        minimumPricePerGram: {
-            type: Number,
-            required: true,
-            min: 0,
-        },
-
         finalPricePerGram: {
             type: Number,
             alias: "pricePerGram",
-            required: true,
+            default: 0,
             min: 0,
         },
 
         baseValue: {
             type: Number,
-            required: true,
+            default: 0,
             min: 0,
         },
 
         markupValue: {
             type: Number,
-            required: true,
+            default: 0,
             min: 0,
         },
 
         profitValue: {
             type: Number,
-            required: true,
+            default: 0,
         },
 
         lineTotal: {
@@ -93,6 +117,17 @@ const saleItemSchema = new mongoose.Schema(
             type: Boolean,
             default: false,
         },
+
+        // ── Daily pricing snapshot fields (added for historical accuracy) ──
+        // These ensure old records are never recalculated if daily prices change.
+        globalGoldPricePerOunceSnapshot: { type: Number, default: 0 },
+        sellOffsetPerOunceSnapshot: { type: Number, default: 0 },
+        usdIlsExchangeRateSnapshot: { type: Number, default: 0 },
+        sellBasePricePerGramSnapshot: { type: Number, default: 0 },
+        productExtraPerGramSnapshot: { type: Number, default: 0 },
+        expectedProductPricePerGramSnapshot: { type: Number, default: 0 },
+        profitPerGramSnapshot: { type: Number, default: 0 },
+        lineProfitSnapshot: { type: Number, default: 0 },
     },
     { _id: false }
 );
@@ -150,19 +185,29 @@ const saleSchema = new mongoose.Schema(
 
         totalBaseValue: {
             type: Number,
-            required: true,
+            default: 0,
             min: 0,
         },
 
         totalMarkupValue: {
             type: Number,
-            required: true,
+            default: 0,
             min: 0,
         },
 
         totalProfitValue: {
             type: Number,
-            required: true,
+            default: 0,
+        },
+
+        totalLineRevenue: {
+            type: Number,
+            default: 0,
+        },
+
+        expectedMinimumTotal: {
+            type: Number,
+            default: 0,
         },
 
         subtotal: {
@@ -173,7 +218,7 @@ const saleSchema = new mongoose.Schema(
 
         expectedMargin: {
             type: Number,
-            required: true,
+            default: 0,
         },
 
         finalTotal: {
@@ -201,6 +246,16 @@ const saleSchema = new mongoose.Schema(
             default: "",
             trim: true,
         },
+
+        // ── Sale-level daily pricing snapshot ─────────────────────────────────
+        globalGoldPricePerOunceSnapshot: { type: Number, default: 0 },
+        sellOffsetPerOunceSnapshot: { type: Number, default: 0 },
+        usdIlsExchangeRateSnapshot: { type: Number, default: 0 },
+        dailyPricingId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "DailyPricing",
+            default: null,
+        },
     },
     {
         timestamps: true,
@@ -210,11 +265,10 @@ const saleSchema = new mongoose.Schema(
 );
 
 // Auto-generate ref if not provided (TX-<timestamp suffix>)
-saleSchema.pre("validate", function (next) {
+saleSchema.pre("validate", function () {
     if (!this.ref) {
         this.ref = `TX-${Date.now().toString().slice(-5)}`;
     }
-    next();
 });
 
 module.exports = mongoose.model("Sale", saleSchema);

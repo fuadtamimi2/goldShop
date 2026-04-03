@@ -3,6 +3,8 @@ import AppRoutes from "./app/AppRoutes";
 import { AuthProvider } from "./store/auth.store";
 import { CurrencyProvider } from "./store/currency.store";
 import { SettingsProvider } from "./store/settings.store";
+import { DailyPricingProvider } from "./store/dailyPricing.store";
+import DailyPricingModal from "./components/DailyPricingModal";
 
 function InnerApp() {
   const { user } = useAuth();
@@ -10,7 +12,10 @@ function InnerApp() {
   return (
     <CurrencyProvider>
       <SettingsProvider user={user}>
-        <AppRoutes />
+        <DailyPricingProvider user={user}>
+          <DailyPricingModal />
+          <AppRoutes />
+        </DailyPricingProvider>
       </SettingsProvider>
     </CurrencyProvider>
   );

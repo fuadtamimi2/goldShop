@@ -22,9 +22,11 @@ function Field({ label, children, hint }) {
 const defaultSettings = {
   currency: "ILS",
   defaultKarat: "24K",
-  defaultMarkupPerGram: 0,
   lowStockLimit: 2,
   minimumProfitPerGram: 0,
+  defaultBuyOffsetPerOunce: 0,
+  defaultSellOffsetPerOunce: 0,
+  defaultUsdIlsExchangeRate: 3.69,
   businessName: "",
   receiptFooter: "",
   notes: "",
@@ -155,18 +157,6 @@ export default function Settings() {
                 </select>
               </Field>
 
-              <Field label={t("settings.fields.defaultMarkup")} hint={t("settings.fields.defaultMarkupHint")}>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={settings.defaultMarkupPerGram}
-                  onChange={(e) => setSettings({ ...settings, defaultMarkupPerGram: Number(e.target.value) })}
-                  disabled={saving}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200 disabled:bg-slate-50"
-                />
-              </Field>
-
               <Field label={t("settings.fields.lowStockLimit")} hint={t("settings.fields.lowStockLimitHint")}>
                 <input
                   type="number"
@@ -178,17 +168,55 @@ export default function Settings() {
                 />
               </Field>
 
-              <Field label={t("settings.fields.minProfit")} hint={t("settings.fields.minProfitHint")}>
+              <Field
+                label={t("settings.fields.defaultBuyOffsetPerOunce")}
+                hint={t("settings.fields.defaultBuyOffsetPerOunceHint")}
+              >
                 <input
                   type="number"
-                  min="0"
                   step="0.01"
-                  value={settings.minimumProfitPerGram}
-                  onChange={(e) => setSettings({ ...settings, minimumProfitPerGram: Number(e.target.value) })}
+                  value={settings.defaultBuyOffsetPerOunce}
+                  onChange={(e) =>
+                    setSettings({ ...settings, defaultBuyOffsetPerOunce: Number(e.target.value) })
+                  }
                   disabled={saving}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200 disabled:bg-slate-50"
                 />
               </Field>
+
+              <Field
+                label={t("settings.fields.defaultSellOffsetPerOunce")}
+                hint={t("settings.fields.defaultSellOffsetPerOunceHint")}
+              >
+                <input
+                  type="number"
+                  step="0.01"
+                  value={settings.defaultSellOffsetPerOunce}
+                  onChange={(e) =>
+                    setSettings({ ...settings, defaultSellOffsetPerOunce: Number(e.target.value) })
+                  }
+                  disabled={saving}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200 disabled:bg-slate-50"
+                />
+              </Field>
+
+              <Field
+                label={t("settings.fields.defaultUsdIlsExchangeRate")}
+                hint={t("settings.fields.defaultUsdIlsExchangeRateHint")}
+              >
+                <input
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  value={settings.defaultUsdIlsExchangeRate}
+                  onChange={(e) =>
+                    setSettings({ ...settings, defaultUsdIlsExchangeRate: Number(e.target.value) })
+                  }
+                  disabled={saving}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200 disabled:bg-slate-50"
+                />
+              </Field>
+
             </div>
 
             <div className="mt-4">

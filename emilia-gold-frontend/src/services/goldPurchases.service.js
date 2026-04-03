@@ -6,14 +6,32 @@ function normalizeNumber(value, fallback = 0) {
 }
 
 function normalizeItem(item = {}) {
+    const marketPricePerGram = normalizeNumber(
+        item.marketPricePerGram ?? item.externalReferenceBuyPricePerGram,
+        0
+    );
+    const boughtPricePerGram = normalizeNumber(
+        item.boughtPricePerGram ?? item.purchasePricePerGram,
+        0
+    );
+    const expectedRevenue = normalizeNumber(item.expectedRevenue ?? item.expectedMargin, 0);
+    const buyBasePricePerGramSnapshot = normalizeNumber(
+        item.buyBasePricePerGramSnapshot ?? marketPricePerGram,
+        0
+    );
+
     return {
         ...item,
         weight: normalizeNumber(item.weight, 0),
-        externalReferenceBuyPricePerGram: normalizeNumber(item.externalReferenceBuyPricePerGram, 0),
-        purchasePricePerGram: normalizeNumber(item.purchasePricePerGram, 0),
+        marketPricePerGram,
+        boughtPricePerGram,
+        buyBasePricePerGramSnapshot,
+        externalReferenceBuyPricePerGram: marketPricePerGram,
+        purchasePricePerGram: boughtPricePerGram,
         estimatedResaleValue: normalizeNumber(item.estimatedResaleValue, 0),
         totalPurchaseAmount: normalizeNumber(item.totalPurchaseAmount, 0),
-        expectedMargin: normalizeNumber(item.expectedMargin, 0),
+        expectedRevenue,
+        expectedMargin: expectedRevenue,
     };
 }
 
@@ -24,5 +42,5 @@ export async function listGoldPurchases() {
 
 export async function createGoldPurchase(payload) {
     const data = await apiPost("/api/gold-purchases", payload);
-    return normalizeItem(data.item);
+    return { item: normalizeItem(data.item), receipt: data.receipt || null };
 }

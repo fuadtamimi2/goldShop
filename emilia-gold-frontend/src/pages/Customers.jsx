@@ -12,6 +12,13 @@ import {
   deleteCustomer,
 } from "../services/customers.service";
 
+function formatDate(value) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toISOString().slice(0, 10);
+}
+
 function Modal({ title, open, onClose, children }) {
   if (!open) return null;
   return (
@@ -47,6 +54,10 @@ export default function Customers() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [q, setQ] = useState("");
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [errorText, setErrorText] = useState("");
   const [selectedId, setSelectedId] = useState(null);
 
   const [addOpen, setAddOpen] = useState(false);
@@ -55,10 +66,36 @@ export default function Customers() {
   const emptyDraft = { idNumber: "", name: "", phone: "", city: "", email: "", notes: "" };
   const [draft, setDraft] = useState(emptyDraft);
 
-  // Recomputed each render based on q; OK for demo/localStorage.
-  const customers = useMemo(() => listCustomers(q), [q]);
+  useEffect(() => {
+    async function loadCustomers() {
+      try {
+        setLoading(true);
+        setErrorText("");
+        const items = await listCustomers();
+        setCustomers(items);
+      } catch (err) {
+        setErrorText(err.message || "Failed to load customers.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadCustomers();
+  }, []);
+
+  const rows = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    if (!query) return customers;
+
+    return customers.filter((c) =>
+      [c.name, c.phone, c.city, c._id, c.idNumber, c.email]
+        .filter(Boolean)
+        .some((x) => String(x).toLowerCase().includes(query))
+    );
+  }, [customers, q]);
+
   const selected = useMemo(
-    () => customers.find((c) => c.id === selectedId) || null,
+    () => customers.find((c) => c._id === selectedId) || null,
     [customers, selectedId]
   );
 
@@ -71,9 +108,9 @@ export default function Customers() {
     if (searchParams.get("new") === "1") {
       setDraft({ idNumber: "", name: "", phone: "", city: "", email: "", notes: "" });
       setAddOpen(true);
-      const next = new URLSearchParams(searchParams);
-      next.delete("new");
-      setSearchParams(next, { replace: true });
+      const nextSearchParams = new URLSearchParams(searchParams);
+      nextSearchParams.delete("new");
+      setSearchParams(nextSearchParams, { replace: true });
     }
   }, [searchParams, setSearchParams]);
 
@@ -90,61 +127,72 @@ export default function Customers() {
     setEditOpen(true);
   };
 
-  const onAdd = () => {
-    const res = createCustomer(draft);
-    if (!res.ok) {
-      emitToast({ type: "error", title: "Error", message: res.message });
-      return;
+  const onAdd = async () => {
+    try {
+      setSaving(true);
+      setErrorText("");
+      const created = await createCustomer(draft);
+      setCustomers((prev) => [created, ...prev]);
+      emitToast({
+        type: "success",
+        title: t("customers.toasts.addedTitle"),
+        message: created?.name || t("common.save"),
+      });
+      setAddOpen(false);
+      setSelectedId(created?._id || null);
+    } catch (err) {
+      setErrorText(err.message || "Failed to save customer.");
+      emitToast({ type: "error", title: t("common.error"), message: err.message });
+    } finally {
+      setSaving(false);
     }
-
-    emitToast({
-      type: "success",
-      title: t("customers.toasts.addedTitle"),
-      message: res.customer?.name || t("common.save"),
-    });
-
-    setAddOpen(false);
-    // optional: auto-select the new customer
-    setSelectedId(res.customer?.id || null);
   };
 
-  const onEditSave = () => {
+  const onEditSave = async () => {
     if (!selected) return;
 
-    const res = updateCustomer(selected.id, draft);
-    if (!res.ok) {
-      emitToast({ type: "error", title: "Error", message: res.message });
-      return;
+    try {
+      setSaving(true);
+      setErrorText("");
+      const updated = await updateCustomer(selected._id, draft);
+      setCustomers((prev) => prev.map((c) => (c._id === updated._id ? updated : c)));
+      emitToast({
+        type: "success",
+        title: t("customers.toasts.updatedTitle"),
+        message: updated?.name || selected.name,
+      });
+      setEditOpen(false);
+    } catch (err) {
+      setErrorText(err.message || "Failed to update customer.");
+      emitToast({ type: "error", title: t("common.error"), message: err.message });
+    } finally {
+      setSaving(false);
     }
-
-    emitToast({
-      type: "success",
-      title: t("customers.toasts.updatedTitle"),
-      message: res.customer?.id || selected.id,
-    });
-
-    setEditOpen(false);
   };
 
-  const onDelete = () => {
+  const onDelete = async () => {
     if (!selected) return;
 
     const ok = confirm(t("customers.deleteConfirm", { name: selected.name }));
     if (!ok) return;
 
-    const res = deleteCustomer(selected.id);
-    if (!res.ok) {
-      emitToast({ type: "error", title: t("common.error"), message: res.message });
-      return;
+    try {
+      setSaving(true);
+      setErrorText("");
+      await deleteCustomer(selected._id);
+      setCustomers((prev) => prev.filter((c) => c._id !== selected._id));
+      emitToast({
+        type: "success",
+        title: t("customers.toasts.deletedTitle"),
+        message: selected.name,
+      });
+      setSelectedId(null);
+    } catch (err) {
+      setErrorText(err.message || "Failed to delete customer.");
+      emitToast({ type: "error", title: t("common.error"), message: err.message });
+    } finally {
+      setSaving(false);
     }
-
-    emitToast({
-      type: "success",
-      title: t("customers.toasts.deletedTitle"),
-      message: selected.id,
-    });
-
-    setSelectedId(null);
   };
 
   return (
@@ -159,10 +207,11 @@ export default function Customers() {
         <div className="lg:col-span-2">
           <Panel
             title="Customers"
-            meta={t("customers.meta", { count: customers.length })}
+            meta={t("customers.meta", { count: rows.length })}
             right={
               <button
                 onClick={openAdd}
+                disabled={saving}
                 className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800"
               >
                 {t("customers.newCustomer")}
@@ -177,6 +226,12 @@ export default function Customers() {
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
               />
             </div>
+
+            {errorText ? (
+              <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                {errorText}
+              </div>
+            ) : null}
 
             <div className="overflow-auto rounded-xl border border-slate-100">
               <table className="w-full text-sm">
@@ -197,26 +252,32 @@ export default function Customers() {
                   </tr>
                 </thead>
                 <tbody>
-                  {customers.length === 0 ? (
+                  {loading ? (
+                    <tr>
+                      <td className="px-4 py-6 text-slate-500" colSpan={6}>
+                        {t("common.loading")}
+                      </td>
+                    </tr>
+                  ) : rows.length === 0 ? (
                     <tr>
                       <td className="px-4 py-6 text-slate-500" colSpan={6}>
                         {t("customers.noCustomers")}
                       </td>
                     </tr>
                   ) : (
-                    customers.map((c) => {
-                      const active = c.id === selectedId;
+                    rows.map((c) => {
+                      const active = c._id === selectedId;
                       return (
                         <tr
-                          key={c.id}
-                          onClick={() => setSelectedId(c.id)}
+                          key={c._id}
+                          onClick={() => setSelectedId(c._id)}
                           className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${active ? "bg-amber-50" : ""
                             }`}
                         >
                           <td className="px-4 py-3 font-medium text-slate-900">
                             {c.name}{" "}
                             <span className="ml-2 text-xs text-slate-400">
-                              {c.id}
+                              {c._id}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-slate-700">
@@ -232,7 +293,7 @@ export default function Customers() {
                               : "—"}
                           </td>
                           <td className="px-4 py-3 text-slate-700">
-                            {c.lastPurchase || "—"}
+                            {formatDate(c.lastPurchase)}
                           </td>
                         </tr>
                       );
@@ -248,18 +309,20 @@ export default function Customers() {
         <div className="lg:col-span-1">
           <Panel
             title={t("customers.profile.title")}
-            meta={selected ? selected.id : ""}
+            meta={selected ? selected._id : ""}
             right={
               selected ? (
                 <div className="flex gap-2">
                   <button
                     onClick={openEdit}
+                    disabled={saving}
                     className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
                   >
                     {t("customers.profile.editBtn")}
                   </button>
                   <button
                     onClick={onDelete}
+                    disabled={saving}
                     className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
                   >
                     {t("customers.profile.deleteBtn")}
@@ -304,7 +367,7 @@ export default function Customers() {
 
                   <div className="text-slate-500">{t("customers.profile.lastPurchase")}</div>
                   <div className="text-right text-slate-900">
-                    {selected.lastPurchase || "—"}
+                    {formatDate(selected.lastPurchase)}
                   </div>
                 </div>
 
@@ -382,6 +445,7 @@ export default function Customers() {
             </button>
             <button
               onClick={onAdd}
+              disabled={saving}
               className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800"
             >
               {t("customers.addModal.save")}
@@ -450,6 +514,7 @@ export default function Customers() {
             </button>
             <button
               onClick={onEditSave}
+              disabled={saving}
               className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800"
             >
               {t("customers.editModal.save")}

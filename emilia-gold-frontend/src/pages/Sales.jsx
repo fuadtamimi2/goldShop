@@ -7,7 +7,6 @@ import Table from "../ui/Table";
 import StatusPill from "../ui/StatusPill";
 import { emitToast } from "../ui/toast";
 import { useCurrency } from "../store/currency.store";
-import { useSettings } from "../store/settings.store";
 import { listProducts } from "../services/products.service";
 import { createSale, listSales } from "../services/sales.service";
 import { apiGet } from "../services/apiClient";
@@ -22,34 +21,36 @@ function todayISODate() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function newLineItem(defaultMarkup = 0) {
+function newLineItem() {
   return {
     _rowId: crypto.randomUUID(),
     productId: "",
     productName: "",
     quantitySold: 1,
     soldWeight: "",
-    baseGoldPricePerGram: "",
-    markupPerGram: defaultMarkup || 0,
-    extraProfitPerGram: "",
+    sellBasePricePerGramSnapshot: 0,
+    productExtraPerGram: 0,
+    expectedProductPricePerGram: 0,
+    actualSoldPricePerGram: "",
+    // Legacy compat mirrors
     minimumPricePerGram: 0,
-    finalPricePerGram: 0,
-    baseValue: 0,
-    markupValue: 0,
-    profitValue: 0,
+    productExtraProfitPerGram: 0,
+    expectedMinimumSellingPricePerGram: 0,
+    actualSalePricePerGram: "",
+    lineProfit: 0,
     lineTotal: 0,
-    isBelowMinimum: false,
+    isBelowExpected: false,
   };
 }
 
-function emptyDraft(defaultMarkup = 0) {
+function emptyDraft() {
   return {
     date: todayISODate(),
     customerId: "",
     paymentMethod: "Cash",
     paymentStatus: "Paid",
     notes: "",
-    items: [newLineItem(defaultMarkup)],
+    items: [newLineItem()],
   };
 }
 
@@ -78,8 +79,7 @@ function Field({ label, required, children }) {
 // ─── main component ───────────────────────────────────────────────────────────
 
 export default function Sales() {
-  const { formatMoney } = useCurrency();
-  const { settings } = useSettings();
+  const { currency, formatMoney, convertCurrency } = useCurrency();
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -96,7 +96,7 @@ export default function Sales() {
 
   // ── add-sale modal
   const [addOpen, setAddOpen] = useState(false);
-  const [draft, setDraft] = useState(() => emptyDraft(settings.defaultMarkupPerGram));
+  const [draft, setDraft] = useState(() => emptyDraft());
   const [draftErrors, setDraftErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
@@ -162,18 +162,18 @@ export default function Sales() {
   // Open modal when ?new=1 is in URL
   useEffect(() => {
     if (searchParams.get("new") === "1" && !addOpen) {
-      setDraft(emptyDraft(settings.defaultMarkupPerGram));
+      setDraft(emptyDraft());
       setDraftErrors({});
       setAddOpen(true);
     }
-  }, [searchParams, settings.defaultMarkupPerGram]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─────────────────────────────────────────────────────────────────────────
   // Modal handlers
   // ─────────────────────────────────────────────────────────────────────────
 
   function openAdd() {
-    setDraft(emptyDraft(settings.defaultMarkupPerGram));
+    setDraft(emptyDraft());
     setDraftErrors({});
     setAddOpen(true);
   }
@@ -181,9 +181,9 @@ export default function Sales() {
   function closeAdd() {
     setAddOpen(false);
     if (searchParams.get("new") === "1") {
-      const next = new URLSearchParams(searchParams);
-      next.delete("new");
-      setSearchParams(next, { replace: true });
+      const nextSearchParams = new URLSearchParams(searchParams);
+      nextSearchParams.delete("new");
+      setSearchParams(nextSearchParams, { replace: true });
     }
   }
 
@@ -218,9 +218,7 @@ export default function Sales() {
 
       const quantitySold = Number(item.quantitySold) || 0;
       const soldWeight = Number(item.soldWeight) || 0;
-      const base = Number(item.baseGoldPricePerGram) || -1;
-      const markup = Number(item.markupPerGram) || -1;
-      const extra = Number(item.extraProfitPerGram) || NaN;
+      const actualPrice = Number(item.actualSoldPricePerGram ?? item.actualSalePricePerGram);
 
       if (!Number.isInteger(quantitySold) || quantitySold < 1) {
         errs.items = "Each line must have quantity sold of at least 1.";
@@ -232,18 +230,8 @@ export default function Sales() {
         return errs;
       }
 
-      if (!Number.isFinite(base) || base < 0) {
-        errs.items = "Each line must have a valid base gold price per gram.";
-        return errs;
-      }
-
-      if (!Number.isFinite(markup) || markup < 0) {
-        errs.items = "Each line must have a valid markup per gram.";
-        return errs;
-      }
-
-      if (!Number.isFinite(extra)) {
-        errs.items = "Each line must have a valid extra profit adjustment.";
+      if (!Number.isFinite(actualPrice) || actualPrice < 0) {
+        errs.items = "Each line must have a valid actual sold price per gram.";
         return errs;
       }
 
@@ -260,7 +248,6 @@ export default function Sales() {
         return errs;
       }
 
-      // Check against grouped inventory fields (quantity and totalWeight)
       if (aggregate.quantitySold > Number(product.quantity || 0)) {
         errs.items = `Insufficient quantity for "${product.name}". Available ${product.quantity}.`;
         return errs;
@@ -286,7 +273,6 @@ export default function Sales() {
       return;
     }
 
-    // FIXED: Send correct field names to backend
     const payload = {
       customerId: draft.customerId,
       date: draft.date || todayISODate(),
@@ -295,9 +281,9 @@ export default function Sales() {
         productName: r.productName,
         quantitySold: Number(r.quantitySold),
         soldWeight: Number(r.soldWeight),
-        baseGoldPricePerGram: Number(r.baseGoldPricePerGram),
-        markupPerGram: Number(r.markupPerGram),
-        extraProfitPerGram: Number(r.extraProfitPerGram),
+        // Send new canonical fields; backend will also accept legacy names
+        actualSoldPricePerGram: Number(r.actualSoldPricePerGram ?? r.actualSalePricePerGram),
+        productExtraPerGram: Number(r.productExtraPerGram ?? r.productExtraProfitPerGram ?? 0),
       })),
       paymentMethod: draft.paymentMethod,
       paymentStatus: draft.paymentStatus,
@@ -308,7 +294,6 @@ export default function Sales() {
       setSaving(true);
       const { item: sale, receipt: rec } = await createSale(payload);
 
-      // Update sales list
       setTransactions((prev) => [
         {
           _id: sale._id,
@@ -324,7 +309,6 @@ export default function Sales() {
         ...prev,
       ]);
 
-      // Update inventory to reflect deductions
       setProducts((prev) =>
         prev.map((p) => {
           const deduction = draft.items.find((item) => item.productId === p._id);
@@ -340,6 +324,7 @@ export default function Sales() {
       setReceipt(rec);
       setReceiptSaleId(sale._id);
       closeAdd();
+      await Promise.all([loadSales(), loadLookups()]);
       setReceiptOpen(true);
       emitToast({ type: "success", title: "Sale created", message: sale.ref || sale._id });
     } catch (err) {
@@ -374,9 +359,7 @@ export default function Sales() {
         r.productId &&
         Number(r.quantitySold) >= 1 &&
         Number(r.soldWeight) > 0 &&
-        Number(r.baseGoldPricePerGram) >= 0 &&
-        Number(r.markupPerGram) >= 0 &&
-        Number.isFinite(Number(r.extraProfitPerGram))
+        Number.isFinite(Number(r.actualSoldPricePerGram ?? r.actualSalePricePerGram))
     );
   }, [draft]);
 
@@ -404,7 +387,7 @@ export default function Sales() {
         </button>
       ),
     },
-    { key: "amount", header: t("sales.table.amount"), render: (r) => formatMoney(r.amount) },
+    { key: "amount", header: t("sales.table.amount"), render: (r) => formatMoney(r.amount, "USD") },
     { key: "method", header: t("sales.table.method") },
     { key: "status", header: t("sales.table.status"), render: (r) => <StatusPill value={r.status} /> },
   ];
@@ -433,10 +416,9 @@ export default function Sales() {
         }
       />
 
-      {/* Sales list */}
       <Panel>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-1 items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-1 min-w-[260px] items-center gap-2">
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -490,8 +472,10 @@ export default function Sales() {
                               <td className="py-1">{item.productName || "—"}</td>
                               <td className="py-1 text-center">{item.quantitySold}</td>
                               <td className="py-1 text-center">{Number(item.soldWeight || 0).toFixed(2)}g</td>
-                              <td className="py-1 text-center">₪{Number(item.finalPricePerGram || 0).toFixed(2)}</td>
-                              <td className="py-1 text-right font-semibold">{formatMoney(item.lineTotal || 0)}</td>
+                              <td className="py-1 text-center">
+                                {formatMoney(item.actualSalePricePerGram ?? item.finalPricePerGram ?? 0, "USD")}
+                              </td>
+                              <td className="py-1 text-right font-semibold">{formatMoney(item.lineTotal || 0, "USD")}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -505,181 +489,175 @@ export default function Sales() {
         </div>
       </Panel>
 
-      {/* Add Sale Modal */}
       {addOpen && (
-        <div className="fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto p-4">
-          <div className="absolute inset-0 bg-black/40" onClick={closeAdd} />
-          <div className="relative my-8 w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
-
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-              <div>
-                <div className="text-lg font-bold text-slate-900">{t("sales.modal.title")}</div>
-                <div className="mt-0.5 text-xs text-slate-400">
-                  {t("sales.modal.subtitle")}
+        <>
+          <div className="fixed inset-0 z-[999] bg-black/40" onClick={closeAdd} />
+          <div className="fixed inset-0 z-[1000] overflow-y-auto p-4" onClick={closeAdd}>
+            <div
+              className="relative mx-auto my-8 w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                <div>
+                  <div className="text-lg font-bold text-slate-900">{t("sales.modal.title")}</div>
+                  <div className="mt-0.5 text-xs text-slate-400">{t("sales.modal.subtitle")}</div>
                 </div>
+                <button
+                  onClick={closeAdd}
+                  className="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-50 hover:text-slate-700"
+                >
+                  ✕
+                </button>
               </div>
-              <button
-                onClick={closeAdd}
-                className="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-50 hover:text-slate-700"
-              >
-                ✕
-              </button>
-            </div>
 
-            <div className="space-y-6 p-6">
-
-              {/* 1. Customer */}
-              <div className="space-y-3">
-                <SectionLabel>{t("sales.modal.customer")}</SectionLabel>
-                <div className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <Field label={t("sales.modal.customer")} required>
-                      <select
-                        value={draft.customerId}
-                        onChange={(e) => setDraftField("customerId", e.target.value)}
-                        disabled={saving || lookupsLoading}
-                        className={inputCls + (draftErrors.customerId ? " border-red-400" : "")}
-                      >
-                        <option value="">
-                          {lookupsLoading ? t("common.loading") : t("sales.modal.chooseCustomer")}
-                        </option>
-                        {customers.map((c) => (
-                          <option key={c._id} value={c._id}>
-                            {c.name}{c.phone ? ` · ${c.phone}` : ""}
+              <div className="space-y-6 p-6">
+                <div className="space-y-3">
+                  <SectionLabel>{t("sales.modal.customer")}</SectionLabel>
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <Field label={t("sales.modal.customer")} required>
+                        <select
+                          value={draft.customerId}
+                          onChange={(e) => setDraftField("customerId", e.target.value)}
+                          disabled={saving || lookupsLoading}
+                          className={inputCls + (draftErrors.customerId ? " border-red-400" : "")}
+                        >
+                          <option value="">
+                            {lookupsLoading ? t("common.loading") : t("sales.modal.chooseCustomer")}
                           </option>
-                        ))}
+                          {customers.map((c) => (
+                            <option key={c._id} value={c._id}>
+                              {c.name}
+                              {c.phone ? ` · ${c.phone}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      {draftErrors.customerId && (
+                        <p className="mt-1 text-xs text-red-600">{draftErrors.customerId}</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setQcOpen(true)}
+                      disabled={saving}
+                      className="shrink-0 rounded-lg border border-dashed border-amber-400 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                    >
+                      {t("sales.modal.quickCreate")}
+                    </button>
+                  </div>
+                  {selectedCustomer && (
+                    <div className="flex flex-wrap gap-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      <span>👤 {selectedCustomer.name}</span>
+                      {selectedCustomer.phone && <span>📞 {selectedCustomer.phone}</span>}
+                      {selectedCustomer.email && <span>✉ {selectedCustomer.email}</span>}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <Field label={t("sales.modal.saleDate")} required>
+                    <input
+                      type="date"
+                      value={draft.date}
+                      onChange={(e) => setDraftField("date", e.target.value)}
+                      disabled={saving}
+                      className={inputCls}
+                    />
+                  </Field>
+                </div>
+
+                <div className="space-y-3">
+                  <SectionLabel>{t("sales.modal.items")}</SectionLabel>
+                  {draftErrors.items && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                      {draftErrors.items}
+                    </div>
+                  )}
+                  <SaleItemsTable
+                    items={draft.items}
+                    products={products}
+                    onChange={(updated) => {
+                      setDraft((prev) => ({ ...prev, items: updated }));
+                      setDraftErrors((prev) => ({ ...prev, items: undefined }));
+                    }}
+                    currency={{ currency, formatMoney, convertCurrency }}
+                    disabled={saving || lookupsLoading}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <SectionLabel>{t("sales.modal.totals")}</SectionLabel>
+                  <SaleTotalsCard items={draft.items} currency={{ formatMoney }} />
+                </div>
+
+                <div className="space-y-3">
+                  <SectionLabel>{t("sales.modal.payment")}</SectionLabel>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field label={t("sales.modal.paymentMethod")}>
+                      <select
+                        value={draft.paymentMethod}
+                        onChange={(e) => setDraftField("paymentMethod", e.target.value)}
+                        disabled={saving}
+                        className={inputCls}
+                      >
+                        <option>Cash</option>
+                        <option>Card</option>
+                        <option>Transfer</option>
+                        <option>Other</option>
                       </select>
                     </Field>
-                    {draftErrors.customerId && (
-                      <p className="mt-1 text-xs text-red-600">{draftErrors.customerId}</p>
-                    )}
+                    <Field label={t("sales.modal.paymentStatus")}>
+                      <select
+                        value={draft.paymentStatus}
+                        onChange={(e) => setDraftField("paymentStatus", e.target.value)}
+                        disabled={saving}
+                        className={inputCls}
+                      >
+                        <option>Paid</option>
+                        <option>Pending</option>
+                        <option>Refunded</option>
+                      </select>
+                    </Field>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setQcOpen(true)}
-                    disabled={saving}
-                    className="shrink-0 rounded-lg border border-dashed border-amber-400 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50"
-                  >
-                    {t("sales.modal.quickCreate")}
-                  </button>
                 </div>
-                {selectedCustomer && (
-                  <div className="flex flex-wrap gap-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                    <span>👤 {selectedCustomer.name}</span>
-                    {selectedCustomer.phone && <span>📞 {selectedCustomer.phone}</span>}
-                    {selectedCustomer.email && <span>✉ {selectedCustomer.email}</span>}
-                  </div>
-                )}
-              </div>
 
-              {/* 2. Date */}
-              <div>
-                <Field label={t("sales.modal.saleDate")} required>
-                  <input
-                    type="date"
-                    value={draft.date}
-                    onChange={(e) => setDraftField("date", e.target.value)}
+                <div className="space-y-2">
+                  <SectionLabel>{t("sales.modal.notes")}</SectionLabel>
+                  <textarea
+                    value={draft.notes}
+                    onChange={(e) => setDraftField("notes", e.target.value)}
+                    rows={2}
+                    placeholder={t("sales.modal.notesPlaceholder")}
                     disabled={saving}
-                    className={inputCls}
+                    className={inputCls + " resize-none"}
                   />
-                </Field>
-              </div>
-
-              {/* 3. Items */}
-              <div className="space-y-3">
-                <SectionLabel>{t("sales.modal.items")}</SectionLabel>
-                {draftErrors.items && (
-                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {draftErrors.items}
-                  </div>
-                )}
-                <SaleItemsTable
-                  items={draft.items}
-                  products={products}
-                  onChange={(updated) => {
-                    setDraft((prev) => ({ ...prev, items: updated }));
-                    setDraftErrors((prev) => ({ ...prev, items: undefined }));
-                  }}
-                  currency={{ formatMoney }}
-                  disabled={saving || lookupsLoading}
-                />
-              </div>
-
-              {/* 4. Totals */}
-              <div className="space-y-2">
-                <SectionLabel>{t("sales.modal.totals")}</SectionLabel>
-                <SaleTotalsCard items={draft.items} currency={{ formatMoney }} />
-              </div>
-
-              {/* 5. Payment */}
-              <div className="space-y-3">
-                <SectionLabel>{t("sales.modal.payment")}</SectionLabel>
-                <div className="grid grid-cols-2 gap-4">
-                  <Field label={t("sales.modal.paymentMethod")}>
-                    <select
-                      value={draft.paymentMethod}
-                      onChange={(e) => setDraftField("paymentMethod", e.target.value)}
-                      disabled={saving}
-                      className={inputCls}
-                    >
-                      <option>Cash</option>
-                      <option>Card</option>
-                      <option>Transfer</option>
-                      <option>Other</option>
-                    </select>
-                  </Field>
-                  <Field label={t("sales.modal.paymentStatus")}>
-                    <select
-                      value={draft.paymentStatus}
-                      onChange={(e) => setDraftField("paymentStatus", e.target.value)}
-                      disabled={saving}
-                      className={inputCls}
-                    >
-                      <option>Paid</option>
-                      <option>Pending</option>
-                      <option>Refunded</option>
-                    </select>
-                  </Field>
                 </div>
               </div>
 
-              {/* 6. Notes */}
-              <div className="space-y-2">
-                <SectionLabel>{t("sales.modal.notes")}</SectionLabel>
-                <textarea
-                  value={draft.notes}
-                  onChange={(e) => setDraftField("notes", e.target.value)}
-                  rows={2}
-                  placeholder={t("sales.modal.notesPlaceholder")}
+              <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
+                <button
+                  type="button"
+                  onClick={closeAdd}
                   disabled={saving}
-                  className={inputCls + " resize-none"}
-                />
+                  className="rounded-xl border border-slate-200 px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {t("common.cancel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={onCreateSale}
+                  disabled={saving || !canSubmit}
+                  className="rounded-xl bg-amber-700 px-6 py-2 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-50"
+                >
+                  {saving ? t("sales.modal.submitting") : t("sales.modal.saveSale")}
+                </button>
               </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
-              <button
-                type="button"
-                onClick={closeAdd}
-                disabled={saving}
-                className="rounded-xl border border-slate-200 px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                type="button"
-                onClick={onCreateSale}
-                disabled={saving || !canSubmit}
-                className="rounded-xl bg-amber-700 px-6 py-2 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-50"
-              >
-                {saving ? t("sales.modal.submitting") : t("sales.modal.saveSale")}
-              </button>
             </div>
           </div>
-        </div>
+        </>
       )}
 
-      {/* Quick Create Customer Modal */}
       <QuickCreateCustomerModal
         open={qcOpen}
         onClose={() => setQcOpen(false)}
@@ -691,7 +669,6 @@ export default function Sales() {
         }}
       />
 
-      {/* Receipt Modal */}
       <ReceiptPreviewModal
         open={receiptOpen}
         onClose={() => setReceiptOpen(false)}

@@ -5,7 +5,6 @@ import Panel from "../ui/Panel";
 import Table from "../ui/Table";
 import StatusPill from "../ui/StatusPill";
 import { emitToast } from "../ui/toast";
-import { useCurrency } from "../store/currency.store";
 import { useSettings } from "../store/settings.store";
 import {
   createProduct,
@@ -46,7 +45,6 @@ function Field({ label, children }) {
 }
 
 export default function Inventory() {
-  const { formatMoney } = useCurrency();
   const { settings } = useSettings();
   const { t } = useTranslation();
   const [q, setQ] = useState("");
@@ -68,8 +66,7 @@ export default function Inventory() {
     karat: "",
     quantity: "",
     totalWeight: "",
-    markupPerGram: "",
-    baseCostPerGram: "",
+    extraProfitPerGram: "",
     notes: "",
   };
   const [draft, setDraft] = useState(emptyDraft);
@@ -124,8 +121,7 @@ export default function Inventory() {
         karat: item.karat || "",
         quantity: item.quantity || "",
         totalWeight: item.totalWeight || "",
-        markupPerGram: item.markupPerGram || "",
-        baseCostPerGram: item.baseCostPerGram || "",
+        extraProfitPerGram: item.extraProfitPerGram ?? item.markupPerGram ?? "",
         notes: item.notes || "",
       });
       setSelectedId(id);
@@ -145,8 +141,7 @@ export default function Inventory() {
         karat: draft.karat,
         quantity: Number(draft.quantity) || 0,
         totalWeight: Number(draft.totalWeight) || 0,
-        markupPerGram: Number(draft.markupPerGram) || 0,
-        baseCostPerGram: Number(draft.baseCostPerGram) || 0,
+        extraProfitPerGram: Number(draft.extraProfitPerGram) || 0,
         notes: draft.notes,
       });
       setAddOpen(false);
@@ -172,8 +167,7 @@ export default function Inventory() {
         karat: draft.karat,
         quantity: Number(draft.quantity) || 0,
         totalWeight: Number(draft.totalWeight) || 0,
-        markupPerGram: Number(draft.markupPerGram) || 0,
-        baseCostPerGram: Number(draft.baseCostPerGram) || 0,
+        extraProfitPerGram: Number(draft.extraProfitPerGram) || 0,
         notes: draft.notes,
       });
       setEditOpen(false);
@@ -390,28 +384,17 @@ export default function Inventory() {
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
               />
             </Field>
-            <Field label={t("inventory.fields.markupPerGram")}>
+            <Field label={t("inventory.fields.extraProfitPerGram")}>
               <input
                 type="number"
                 step="0.01"
                 min="0"
-                value={draft.markupPerGram}
-                onChange={(e) => setDraft({ ...draft, markupPerGram: e.target.value })}
+                value={draft.extraProfitPerGram}
+                onChange={(e) => setDraft({ ...draft, extraProfitPerGram: e.target.value })}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
               />
             </Field>
           </div>
-
-          <Field label={t("inventory.fields.baseCostPerGram")}>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={draft.baseCostPerGram}
-              onChange={(e) => setDraft({ ...draft, baseCostPerGram: e.target.value })}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            />
-          </Field>
 
           <Field label={t("inventory.fields.notes")}>
             <textarea
@@ -506,28 +489,17 @@ export default function Inventory() {
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
               />
             </Field>
-            <Field label={t("inventory.fields.markupPerGram")}>
+            <Field label={t("inventory.fields.extraProfitPerGram")}>
               <input
                 type="number"
                 step="0.01"
                 min="0"
-                value={draft.markupPerGram}
-                onChange={(e) => setDraft({ ...draft, markupPerGram: e.target.value })}
+                value={draft.extraProfitPerGram}
+                onChange={(e) => setDraft({ ...draft, extraProfitPerGram: e.target.value })}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
               />
             </Field>
           </div>
-
-          <Field label={t("inventory.fields.baseCostPerGram")}>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={draft.baseCostPerGram}
-              onChange={(e) => setDraft({ ...draft, baseCostPerGram: e.target.value })}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            />
-          </Field>
 
           <Field label={t("inventory.fields.notes")}>
             <textarea

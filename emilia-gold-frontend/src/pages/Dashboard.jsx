@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Panel from "../ui/Panel";
-import { SALES_TRANSACTIONS } from "../data/sales";
-import { INVENTORY } from "../data/inventory";
+import { listSales } from "../services/sales.service";
+import { listGoldPurchases } from "../services/goldPurchases.service";
+import { listProducts } from "../services/products.service";
 import { useCurrency } from "../store/currency.store";
 
 function Card({ title, value, sub, badge }) {
@@ -23,68 +24,98 @@ function Card({ title, value, sub, badge }) {
   );
 }
 
+/** Return start-of-day and end-of-day Date objects for the local calendar date `d`. */
+function dayRange(d) {
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+  return { start, end };
+}
+
+function isInDay(dateValue, { start, end }) {
+  const d = new Date(dateValue);
+  return d >= start && d <= end;
+}
+
 export default function Dashboard() {
   const { formatMoney } = useCurrency();
   const { t } = useTranslation();
-  const today = new Date().toISOString().slice(0, 10);
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
 
-  const paidSales = useMemo(
-    () => SALES_TRANSACTIONS.filter((tx) => tx.status === "Paid"),
-    []
-  );
+  const [sales, setSales] = useState([]);
+  const [purchases, setPurchases] = useState([]);
+  const [products, setProducts] = useState([]);
 
-  const todaySales = paidSales.filter((tx) => tx.date === today);
-  const yesterdaySales = paidSales.filter((tx) => tx.date === yesterday);
+  useEffect(() => {
+    listSales().then(setSales).catch(() => setSales([]));
+    listGoldPurchases().then(setPurchases).catch(() => setPurchases([]));
+    listProducts().then(setProducts).catch(() => setProducts([]));
+  }, []);
 
-  const todayRevenue = todaySales.reduce((sum, tx) => sum + tx.amount, 0);
-  const yesterdayRevenue = yesterdaySales.reduce((sum, tx) => sum + tx.amount, 0);
+  const now = new Date();
+  const todayRange = useMemo(() => dayRange(now), []);
+  const yesterdayRange = useMemo(() => dayRange(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)), []);
+
+  const paidSales = useMemo(() => sales.filter((s) => s.paymentStatus === "Paid"), [sales]);
+
+  const todaySales = useMemo(() => paidSales.filter((s) => isInDay(s.date, todayRange)), [paidSales, todayRange]);
+  const yesterdaySales = useMemo(() => paidSales.filter((s) => isInDay(s.date, yesterdayRange)), [paidSales, yesterdayRange]);
+
+  const todayRevenue = todaySales.reduce((sum, s) => sum + (s.finalTotal || 0), 0);
+  const yesterdayRevenue = yesterdaySales.reduce((sum, s) => sum + (s.finalTotal || 0), 0);
   const todayTransactions = todaySales.length;
-  const totalGoldSold = paidSales.reduce((sum, tx) => sum + tx.grams, 0);
-  const avgTicket = todayTransactions ? Math.round(todayRevenue / todayTransactions) : 0;
+  const totalGoldSold = paidSales.reduce((sum, s) => sum + (s.totalWeight || 0), 0);
+  const avgTicket = todayTransactions ? todayRevenue / todayTransactions : 0;
 
-  const lowStock = INVENTORY.filter((i) => i.qty <= 2).length;
+  const lowStock = products.filter((p) => (p.quantity ?? 0) <= 2).length;
 
   const changePct =
     yesterdayRevenue > 0
       ? Math.round(((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100)
       : 0;
 
-  const dailyTrend = ["2026-03-21", "2026-03-22", "2026-03-23", "2026-03-24", "2026-03-25"].map(
-    (date) => {
-      const total = paidSales
-        .filter((s) => s.date === date)
-        .reduce((sum, s) => sum + s.amount, 0);
-      return { date: date.slice(5), total };
+  const dailyTrend = useMemo(() => {
+    const days = [];
+    for (let i = 4; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      days.push(d);
     }
-  );
+    return days.map((d) => {
+      const range = dayRange(d);
+      const total = paidSales
+        .filter((s) => isInDay(s.date, range))
+        .reduce((sum, s) => sum + (s.finalTotal || 0), 0);
+      const label = `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      return { date: label, total };
+    });
+  }, [paidSales]);
 
   const maxTrend = Math.max(...dailyTrend.map((d) => d.total), 1);
 
-  const topProducts = [...paidSales]
-    .reduce((map, tx) => {
-      const current = map.get(tx.product) || { product: tx.product, revenue: 0, count: 0 };
-      current.revenue += tx.amount;
-      current.count += 1;
-      map.set(tx.product, current);
-      return map;
-    }, new Map())
-    .values();
-
-  const topList = Array.from(topProducts)
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 5);
+  const topList = useMemo(() => {
+    const map = new Map();
+    for (const sale of paidSales) {
+      for (const item of sale.items || []) {
+        const name = item.productName || "Unknown";
+        const cur = map.get(name) || { product: name, revenue: 0, count: 0 };
+        cur.revenue += item.lineTotal || 0;
+        cur.count += 1;
+        map.set(name, cur);
+      }
+    }
+    return Array.from(map.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+  }, [paidSales]);
 
   const kpis = [
     {
       title: t("dashboard.kpis.todayRevenue"),
-      value: formatMoney(todayRevenue),
+      value: formatMoney(todayRevenue, "USD"),
       sub: t("dashboard.kpis.vsYesterday", { change: `${changePct >= 0 ? "+" : ""}${changePct}` }),
       badge: t("dashboard.kpis.todayBadge"),
     },
     { title: t("dashboard.kpis.transactions"), value: todayTransactions, sub: t("dashboard.kpis.transactionsSub") },
     { title: t("dashboard.kpis.goldSold"), value: `${totalGoldSold.toFixed(1)} g`, sub: t("dashboard.kpis.goldSoldSub") },
-    { title: t("dashboard.kpis.avgTicket"), value: formatMoney(avgTicket), sub: t("dashboard.kpis.lowStockAlerts", { count: lowStock }) },
+    { title: t("dashboard.kpis.avgTicket"), value: formatMoney(avgTicket, "USD"), sub: t("dashboard.kpis.lowStockAlerts", { count: lowStock }) },
   ];
 
   return (
@@ -110,7 +141,7 @@ export default function Dashboard() {
                 <div
                   className="w-full rounded-t-xl bg-[var(--brand)]/85"
                   style={{ height: `${Math.max((d.total / maxTrend) * 170, 12)}px` }}
-                  title={`${d.date}: ${formatMoney(d.total)}`}
+                  title={`${d.date}: ${formatMoney(d.total, "USD")}`}
                 />
                 <div className="text-xs text-[var(--text-muted)]">{d.date}</div>
               </div>
@@ -126,7 +157,7 @@ export default function Dashboard() {
                   <div className="text-sm font-semibold text-[var(--text)]">{idx + 1}. {p.product}</div>
                   <div className="text-xs text-[var(--text-muted)]">{t("dashboard.sales", { count: p.count })}</div>
                 </div>
-                <div className="text-sm font-semibold text-[var(--brand-strong)]">{formatMoney(p.revenue)}</div>
+                <div className="text-sm font-semibold text-[var(--brand-strong)]">{formatMoney(p.revenue, "USD")}</div>
               </div>
             ))}
           </div>
